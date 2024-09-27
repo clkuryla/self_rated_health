@@ -1,0 +1,120 @@
+---
+title: "GSS EDA - health and covariates"
+author: "Christine Lucille Kuryla"
+date: "2024-09-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gridExtra)
+```
+
+Take a look at GSS dataset, what's available, some trends, etc. 
+
+The first variable of interest is "health", which will be the main subject of our analysis. 
+
+https://gssdataexplorer.norc.org/variables/437/vshow
+
+Question on survey: "Would you say your own health, in general, is excellent, good, fair, or  poor?"
+
+# Fetch GSS data 
+
+```{r fetch_data, eval = FALSE}
+
+# Feel free to modify to play with more covariates and variables.
+
+#install.packages('gssr', repos =  c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+# install.packages('gssrdoc', repos = c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+
+library(gssr)
+library(gssrdoc)
+
+data("gss_all"). # this file is big!
+
+data_gss <- as.data.frame(gss_all) %>% 
+  select("year",      # year of survey
+         "cohort",    # birthyear
+         "age",       # age at time of survey
+         "health",    # self-rated health
+         "sex",       # sex
+         "happy",     # self-rated happiness
+         "educ"       # years of education
+         )
+
+write_csv(data_gss, "data/extracted_gss_variables.csv")
+
+```
+
+```{r load_data}
+data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
+  filter(cohort != 9999) %>% 
+  na.omit() %>% 
+  mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
+  mutate(happy = 4 - happy) # same
+```
+
+```{r eda_general}
+
+# histograms
+
+par(mfrow=c(3,3))
+hist(data_gss$age)
+hist(data_gss$cohort)
+hist(data_gss$year)
+hist(data_gss$health)
+hist(data_gss$happy)
+hist(data_gss$educ)
+par(mfrow=c(1,1))
+
+# Tidyverse and flexible number of histograms
+
+# Create list to store ggplot objects
+plot_list <- list()
+
+# Loop through column names and create plots
+for (var in colnames(data_gss)) {
+  if (is.numeric(data_gss[[var]])) {  # Only create histograms for numeric columns
+    p <- ggplot(data_gss, aes_string(x = var)) +
+      geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+      theme_minimal()
+    
+    plot_list[[var]] <- p
+  }
+}
+
+# Display plots in a 3x3 grid
+do.call(grid.arrange, c(plot_list, ncol = 3))
+
+
+```
+
+```{r over_time}
+
+data_gss %>% 
+  group_by(year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health)) +
+  geom_line()
+
+data_gss %>% 
+  group_by(age) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line()
+
+data_gss %>% 
+  group_by(cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = cohort, y = mean_health)) +
+  geom_line()
+
+data_gss %>% 
+  group_by(year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health)) +
+  geom_line()
+
+```
+
