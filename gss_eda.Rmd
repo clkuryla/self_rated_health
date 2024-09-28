@@ -110,11 +110,25 @@ data_gss %>%
   ggplot(aes(x = cohort, y = mean_health)) +
   geom_line()
 
+```
+
+```{r}
+
 data_gss %>% 
-  group_by(year) %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% 
+  group_by(year, cohort) %>% 
   summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = year, y = mean_health)) +
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
   geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% 
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  geom_line()
+
+
 
 ```
 
