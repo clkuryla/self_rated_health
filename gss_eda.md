@@ -1,28 +1,21 @@
----
-title: "GSS EDA - health and covariates"
-author: "Christine Lucille Kuryla"
-date: "2024-09-27"
-output: github_document
----
+GSS EDA - health and covariates
+================
+Christine Lucille Kuryla
+2024-09-27
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
-library(gridExtra)
-```
+Take a look at GSS dataset, what’s available, some trends, etc.
 
-Take a look at GSS dataset, what's available, some trends, etc. 
+The first variable of interest is “health”, which will be the main
+subject of our analysis.
 
-The first variable of interest is "health", which will be the main subject of our analysis. 
+<https://gssdataexplorer.norc.org/variables/437/vshow>
 
-https://gssdataexplorer.norc.org/variables/437/vshow
+Question on survey: “Would you say your own health, in general, is
+excellent, good, fair, or poor?”
 
-Question on survey: "Would you say your own health, in general, is excellent, good, fair, or  poor?"
+# Fetch GSS data
 
-# Fetch GSS data 
-
-```{r fetch_data, eval = FALSE}
-
+``` r
 # Feel free to modify to play with more covariates and variables.
 
 #install.packages('gssr', repos =  c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
@@ -44,10 +37,9 @@ data_gss <- as.data.frame(gss_all) %>%
          )
 
 write_csv(data_gss, "data/extracted_gss_variables.csv")
-
 ```
 
-```{r load_data}
+``` r
 data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
   filter(cohort != 9999) %>% 
   na.omit() %>% 
@@ -55,8 +47,15 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   mutate(happy = 4 - happy) # same
 ```
 
-```{r eda_general}
+    ## Rows: 72390 Columns: 7
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (7): year, cohort, age, health, sex, happy, educ
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
+``` r
 # histograms
 
 par(mfrow=c(3,3))
@@ -67,7 +66,11 @@ hist(data_gss$health)
 hist(data_gss$happy)
 hist(data_gss$educ)
 par(mfrow=c(1,1))
+```
 
+![](gss_eda_files/figure-gfm/eda_general-1.png)<!-- -->
+
+``` r
 # Tidyverse and flexible number of histograms
 
 # Create list to store ggplot objects
@@ -83,75 +86,117 @@ for (var in colnames(data_gss)) {
     plot_list[[var]] <- p
   }
 }
-
-# Display plots in a 3x3 grid
-do.call(grid.arrange, c(plot_list, ncol = 3))
-
-
 ```
 
-```{r over_time}
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
 
+``` r
+# Display plots in a 3x3 grid
+do.call(grid.arrange, c(plot_list, ncol = 3))
+```
+
+![](gss_eda_files/figure-gfm/eda_general-2.png)<!-- -->
+
+``` r
 data_gss %>% 
   group_by(year) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health)) +
   geom_line()
+```
 
+![](gss_eda_files/figure-gfm/over_time-1.png)<!-- -->
+
+``` r
 data_gss %>% 
   group_by(age) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = age, y = mean_health)) +
   geom_line()
+```
 
+![](gss_eda_files/figure-gfm/over_time-2.png)<!-- -->
+
+``` r
 data_gss %>% 
   group_by(cohort) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = cohort, y = mean_health)) +
   geom_line()
-
 ```
 
-```{r}
+![](gss_eda_files/figure-gfm/over_time-3.png)<!-- -->
 
+``` r
 data_gss %>% 
   mutate(cohort = cut(cohort, breaks = 6)) %>% 
   group_by(year, cohort) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = cohort)) +
   geom_line()
+```
 
+    ## `summarise()` has grouped output by 'year'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+
+``` r
 data_gss %>% 
   mutate(cohort = cut(cohort, breaks = 6)) %>% 
   group_by(age, cohort) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = age, y = mean_health, color = cohort)) +
   geom_line()
-
-
-
 ```
 
-```{r happiness_and_health}
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
 
+![](gss_eda_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+
+``` r
 data_gss %>% 
   ggplot(aes(x = health, y = happy)) +
   geom_smooth(method = "lm")
+```
 
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](gss_eda_files/figure-gfm/happiness_and_health-1.png)<!-- -->
+
+``` r
 data_gss %>% 
   mutate(year = cut(year, breaks = 6)) %>% 
   mutate(age = cut(age, breaks = 6)) %>% 
   ggplot(aes(x = health, y = happy, color = age)) +
   facet_wrap(~ year) +
   geom_smooth(method = "lm")
+```
 
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](gss_eda_files/figure-gfm/happiness_and_health-2.png)<!-- -->
+
+``` r
 data_gss %>% 
   mutate(cohort = cut(cohort, breaks = 6)) %>% 
   mutate(year = cut(year, breaks = 6)) %>% 
   ggplot(aes(x = health, y = happy, color = cohort)) +
   facet_wrap(~ year) +
   geom_smooth(method = "lm")
+```
 
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](gss_eda_files/figure-gfm/happiness_and_health-3.png)<!-- -->
+
+``` r
 ######data_gss %>% 
   # group_by(year) %>% 
   # summarize(mean_health = mean(health)) %>% 
@@ -165,6 +210,8 @@ data_gss %>%
   ggplot(aes(x = age, y = health, color = cohort)) +
 #  facet_wrap(~ year) +
   geom_smooth(method = "lm")
-
 ```
 
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](gss_eda_files/figure-gfm/happiness_and_health-4.png)<!-- -->

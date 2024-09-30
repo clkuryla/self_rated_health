@@ -2,7 +2,7 @@
 title: "APC Health Sandbox"
 author: "Christine Lucille Kuryla"
 date: "2024-09-28"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -25,6 +25,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Extra ideas
 * "secret weapon" (coefficent for each years) of "happy" (or w/e) as a predictor of "health"
+* data missingness figure
+* mixtures?!?
 
 # Potential covariates
 * specific health conditions -- but there are a lot!! maybe a faceted graph?
