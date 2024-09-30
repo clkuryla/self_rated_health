@@ -21,8 +21,8 @@ Christine Lucille Kuryla
 - [Correlation Heatmap](#correlation-heatmap)
 - [Mean health over
   Age/Period/Cohort](#mean-health-over-ageperiodcohort)
-- [Some more EDA](#some-more-eda)
-- [Happiness and health](#happiness-and-health)
+- [Cohorts](#cohorts)
+  - [Happiness and health](#happiness-and-health)
 
 Take a look at GSS dataset, what’s available, some trends, etc.
 
@@ -421,7 +421,7 @@ Now let’s take a look at the trend of people’s self-rated health over
 time, as well as by age, and by birthyear.
 
 ``` r
-# Mean health over time, age, and birthyear
+# Mean health over time, age, and birth year
 
 data_gss %>% 
   group_by(year) %>% 
@@ -452,13 +452,30 @@ data_gss %>%
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = cohort, y = mean_health)) +
   geom_line(color = "cornflowerblue") +
-  labs(title = "Cohort: Self-Rated Health by Birthyear",
+  labs(title = "Cohort: Self-Rated Health by Birth Year",
        subtitle = "(all years together)" )
 ```
 
 ![](gss_eda_files/figure-gfm/over_apc-3.png)<!-- -->
 
-# Some more EDA
+# Cohorts
+
+Let’s explore how each cohort tends to rate their health when at the
+same age.
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 ``` r
 data_gss %>% 
@@ -472,23 +489,9 @@ data_gss %>%
     ## `summarise()` has grouped output by 'year'. You can override using the
     ## `.groups` argument.
 
-![](gss_eda_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
-
-``` r
-data_gss %>% 
-  mutate(cohort = cut(cohort, breaks = 6)) %>% 
-  group_by(age, cohort) %>% 
-  summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = age, y = mean_health, color = cohort)) +
-  geom_line()
-```
-
-    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
-    ## argument.
-
 ![](gss_eda_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->
 
-# Happiness and health
+## Happiness and health
 
 ``` r
 data_gss %>% 
