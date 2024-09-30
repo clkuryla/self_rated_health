@@ -73,7 +73,9 @@ Review \*
 
 # More Data
 
-- GSS
+- GSS: <https://gssdataexplorer.norc.org/about>
+  - here’s one distilled thing to check out:
+    <https://gss.norc.org/content/dam/gss/get-documentation/pdf/other/R1%20Release%20Variables.pdf>
 - berkeley thing
 - HRS - <https://hrs.isr.umich.edu/data-products>
 

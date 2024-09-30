@@ -57,7 +57,8 @@ Review
 * https://scholar.harvard.edu/files/apc/files/analyzing_age-period-cohort_data-_a_review_and_critique1.pdf 
 
 # More Data
-* GSS
+* GSS: https://gssdataexplorer.norc.org/about 
+  * here's one distilled thing to check out: https://gss.norc.org/content/dam/gss/get-documentation/pdf/other/R1%20Release%20Variables.pdf 
 * berkeley thing
 * HRS - https://hrs.isr.umich.edu/data-products 
 

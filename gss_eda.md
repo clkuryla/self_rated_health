@@ -33,6 +33,7 @@ data_gss <- as.data.frame(gss_all) %>%
          "health",    # self-rated health
          "sex",       # sex
          "happy",     # self-rated happiness
+         "life",      # is life exciting or dull
          "educ"       # years of education
          )
 
@@ -44,13 +45,14 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   filter(cohort != 9999) %>% 
   na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
-  mutate(happy = 4 - happy) # same
+  mutate(happy = 4 - happy) %>% # same
+  mutate(life = 4 - life) # reverse again, these variables tend to be unintuitively ordered!!!
 ```
 
-    ## Rows: 72390 Columns: 7
+    ## Rows: 72390 Columns: 8
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
-    ## dbl (7): year, cohort, age, health, sex, happy, educ
+    ## dbl (8): year, cohort, age, health, sex, happy, life, educ
     ## 
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
@@ -64,6 +66,7 @@ hist(data_gss$cohort)
 hist(data_gss$year)
 hist(data_gss$health)
 hist(data_gss$happy)
+hist(data_gss$life)
 hist(data_gss$educ)
 par(mfrow=c(1,1))
 ```
@@ -80,7 +83,7 @@ plot_list <- list()
 for (var in colnames(data_gss)) {
   if (is.numeric(data_gss[[var]])) {  # Only create histograms for numeric columns
     p <- ggplot(data_gss, aes_string(x = var)) +
-      geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+      geom_histogram(bins = 20, fill = "pink", color = "hotpink") +
       theme_minimal()
     
     plot_list[[var]] <- p
