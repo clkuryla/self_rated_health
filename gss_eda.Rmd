@@ -41,7 +41,10 @@ data_gss <- as.data.frame(gss_all) %>%
          "sex",       # sex
          "happy",     # self-rated happiness
          "life",      # is life exciting or dull
-         "educ"       # years of education
+         "educ",      # years of education
+         "polviews",  # 1 extremely liberal, 4 moderate, 7 extremely conservative
+         "class",    # 1 lower, 2 middle, 3 working, 4 upper, 5 no class
+         "satfin"    # 1 pretty well satisfied, 2 more or less satisfied, 3 not satisfied at all
          )
 
 write_csv(data_gss, "data/extracted_gss_variables.csv")
@@ -54,22 +57,13 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
-  mutate(life = 4 - life) # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(satfin = 4 - satfin) 
 ```
 
+# Histograms
+
 ```{r eda_general}
-
-# histograms
-
-par(mfrow=c(3,3))
-hist(data_gss$age)
-hist(data_gss$cohort)
-hist(data_gss$year)
-hist(data_gss$health)
-hist(data_gss$happy)
-hist(data_gss$life)
-hist(data_gss$educ)
-par(mfrow=c(1,1))
 
 # Tidyverse and flexible number of histograms
 
@@ -93,7 +87,9 @@ do.call(grid.arrange, c(plot_list, ncol = 3))
 
 ```
 
-```{r over_time}
+# Mean health over A/P/C
+
+```{r over_apc}
 
 data_gss %>% 
   group_by(year) %>% 
@@ -115,6 +111,8 @@ data_gss %>%
 
 ```
 
+# Some more EDA
+
 ```{r}
 
 data_gss %>% 
@@ -134,6 +132,8 @@ data_gss %>%
 
 
 ```
+
+# Happiness and health
 
 ```{r happiness_and_health}
 

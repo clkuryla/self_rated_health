@@ -34,7 +34,10 @@ data_gss <- as.data.frame(gss_all) %>%
          "sex",       # sex
          "happy",     # self-rated happiness
          "life",      # is life exciting or dull
-         "educ"       # years of education
+         "educ",      # years of education
+         "polviews",  # 1 extremely liberal, 4 moderate, 7 extremely conservative
+         "class",    # 1 lower, 2 middle, 3 working, 4 upper, 5 no class
+         "satfin"    # 1 pretty well satisfied, 2 more or less satisfied, 3 not satisfied at all
          )
 
 write_csv(data_gss, "data/extracted_gss_variables.csv")
@@ -46,32 +49,19 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
-  mutate(life = 4 - life) # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(satfin = 4 - satfin) 
 ```
 
-    ## Rows: 72390 Columns: 8
+    ## Rows: 72390 Columns: 11
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
-    ## dbl (8): year, cohort, age, health, sex, happy, life, educ
+    ## dbl (11): year, cohort, age, health, sex, happy, life, educ, polviews, class...
     ## 
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
-``` r
-# histograms
-
-par(mfrow=c(3,3))
-hist(data_gss$age)
-hist(data_gss$cohort)
-hist(data_gss$year)
-hist(data_gss$health)
-hist(data_gss$happy)
-hist(data_gss$life)
-hist(data_gss$educ)
-par(mfrow=c(1,1))
-```
-
-![](gss_eda_files/figure-gfm/eda_general-1.png)<!-- -->
+# Histograms
 
 ``` r
 # Tidyverse and flexible number of histograms
@@ -103,7 +93,9 @@ for (var in colnames(data_gss)) {
 do.call(grid.arrange, c(plot_list, ncol = 3))
 ```
 
-![](gss_eda_files/figure-gfm/eda_general-2.png)<!-- -->
+![](gss_eda_files/figure-gfm/eda_general-1.png)<!-- -->
+
+# Mean health over A/P/C
 
 ``` r
 data_gss %>% 
@@ -113,7 +105,7 @@ data_gss %>%
   geom_line()
 ```
 
-![](gss_eda_files/figure-gfm/over_time-1.png)<!-- -->
+![](gss_eda_files/figure-gfm/over_apc-1.png)<!-- -->
 
 ``` r
 data_gss %>% 
@@ -123,7 +115,7 @@ data_gss %>%
   geom_line()
 ```
 
-![](gss_eda_files/figure-gfm/over_time-2.png)<!-- -->
+![](gss_eda_files/figure-gfm/over_apc-2.png)<!-- -->
 
 ``` r
 data_gss %>% 
@@ -133,7 +125,9 @@ data_gss %>%
   geom_line()
 ```
 
-![](gss_eda_files/figure-gfm/over_time-3.png)<!-- -->
+![](gss_eda_files/figure-gfm/over_apc-3.png)<!-- -->
+
+# Some more EDA
 
 ``` r
 data_gss %>% 
@@ -162,6 +156,8 @@ data_gss %>%
     ## argument.
 
 ![](gss_eda_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+
+# Happiness and health
 
 ``` r
 data_gss %>% 
