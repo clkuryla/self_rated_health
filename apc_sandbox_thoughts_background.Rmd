@@ -61,6 +61,9 @@ Review
   * here's one distilled thing to check out: https://gss.norc.org/content/dam/gss/get-documentation/pdf/other/R1%20Release%20Variables.pdf 
 * berkeley thing
 * HRS - https://hrs.isr.umich.edu/data-products 
+* Life Expectancy 
+  * https://www.macrotrends.net/global-metrics/countries/USA/united-states/life-expectancy
+  * UN: https://population.un.org/wpp/Download/Standard/CSV/ 
 
 # Background Research on Self-Rated Health
 
