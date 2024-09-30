@@ -51,7 +51,7 @@ write_csv(data_gss, "data/extracted_gss_variables.csv")
 
 ```
 
-```{r load_data}
+```{r load_and_clean_data}
 data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
   filter(cohort != 9999) %>% 
   na.omit() %>% 
@@ -60,6 +60,33 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
   mutate(satfin = 4 - satfin) 
 ```
+
+## Peek at df
+```{r head}
+
+head(data_gss)
+
+```
+
+
+## Life expectancy data
+
+```{r, eval = FALSE}
+
+# https://population.un.org/wpp/Download/Standard/CSV/
+data_le <- read_csv("big_data/WPP2024_Demographic_Indicators_Medium.csv")
+data_le <- data_le %>% 
+  filter(Location == "United States of America")
+
+# Just get the years of interest for merging with the gss data
+year_range <- seq(min(data_gss$year), max(data_gss$year))
+data_le <- data_le %>% 
+  filter(Time %in% year_range)
+
+write_csv(data_le, "data/un_life_expectancy_etc.csv")
+
+```
+
 
 # Histograms
 
@@ -120,16 +147,18 @@ ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
   geom_text(aes(Var2, Var1, label = if_else(value != 0, as.character(round(value, digits = 2)), " ")))
 ```
 
-
 # Mean health over A/P/C
 
 ```{r over_apc}
+
+# Mean health over time
 
 data_gss %>% 
   group_by(year) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health)) +
-  geom_line()
+  geom_line() +
+  labs(title = "Self-Rated Health Each Year")
 
 data_gss %>% 
   group_by(age) %>% 
