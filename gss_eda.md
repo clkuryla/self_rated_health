@@ -66,34 +66,74 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
 ``` r
 # Tidyverse and flexible number of histograms
 
+library(patchwork)
+
 # Create list to store ggplot objects
 plot_list <- list()
 
 # Loop through column names and create plots
 for (var in colnames(data_gss)) {
   if (is.numeric(data_gss[[var]])) {  # Only create histograms for numeric columns
-    p <- ggplot(data_gss, aes_string(x = var)) +
+    p <- ggplot(data_gss, aes(x = .data[[var]])) +  # Use .data[[var]] for tidy evaluation
       geom_histogram(bins = 20, fill = "pink", color = "hotpink") +
       theme_minimal()
     
     plot_list[[var]] <- p
   }
 }
-```
 
-    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
-    ## ℹ Please use tidy evaluation idioms with `aes()`.
-    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
+# Combine all plots using patchwork and add a title
+combined_plot <- wrap_plots(plot_list, ncol = 3) +
+  plot_annotation(title = "Histograms of Survey Responses")
 
-``` r
-# Display plots in a 3x3 grid
-do.call(grid.arrange, c(plot_list, ncol = 3))
+# Display the combined plot
+print(combined_plot)
 ```
 
 ![](gss_eda_files/figure-gfm/eda_general-1.png)<!-- -->
+
+# Correlation Heatmap
+
+``` r
+correlation_auto <- cor(data_gss)
+knitr::kable(correlation_auto)
+```
+
+|  | year | cohort | age | health | sex | happy | life | educ | polviews | class | satfin |
+|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| year | 1.0000000 | 0.5895682 | 0.1156949 | -0.0550720 | -0.0057159 | -0.0856281 | -0.0001011 | 0.2471477 | -0.0136163 | -0.0263427 | -0.0223087 |
+| cohort | 0.5895682 | 1.0000000 | -0.7340846 | 0.1406949 | -0.0252270 | -0.0745466 | 0.0528437 | 0.2747073 | -0.0984603 | -0.1212801 | -0.1544326 |
+| age | 0.1156949 | -0.7340846 | 1.0000000 | -0.2193179 | 0.0262172 | 0.0196846 | -0.0650690 | -0.1300390 | 0.1096333 | 0.1269966 | 0.1711570 |
+| health | -0.0550720 | 0.1406949 | -0.2193179 | 1.0000000 | -0.0264873 | 0.2722478 | 0.2645358 | 0.2565862 | -0.0060991 | 0.1656160 | 0.1780896 |
+| sex | -0.0057159 | -0.0252270 | 0.0262172 | -0.0264873 | 1.0000000 | 0.0070138 | -0.0556529 | -0.0303791 | -0.0322852 | -0.0154809 | -0.0314176 |
+| happy | -0.0856281 | -0.0745466 | 0.0196846 | 0.2722478 | 0.0070138 | 1.0000000 | 0.3374248 | 0.0761941 | 0.0562054 | 0.1745948 | 0.2957047 |
+| life | -0.0001011 | 0.0528437 | -0.0650690 | 0.2645358 | -0.0556529 | 0.3374248 | 1.0000000 | 0.2047851 | -0.0148122 | 0.1641290 | 0.1743384 |
+| educ | 0.2471477 | 0.2747073 | -0.1300390 | 0.2565862 | -0.0303791 | 0.0761941 | 0.2047851 | 1.0000000 | -0.0752421 | 0.2765887 | 0.1106097 |
+| polviews | -0.0136163 | -0.0984603 | 0.1096333 | -0.0060991 | -0.0322852 | 0.0562054 | -0.0148122 | -0.0752421 | 1.0000000 | 0.0118224 | 0.0586271 |
+| class | -0.0263427 | -0.1212801 | 0.1269966 | 0.1656160 | -0.0154809 | 0.1745948 | 0.1641290 | 0.2765887 | 0.0118224 | 1.0000000 | 0.3343757 |
+| satfin | -0.0223087 | -0.1544326 | 0.1711570 | 0.1780896 | -0.0314176 | 0.2957047 | 0.1743384 | 0.1106097 | 0.0586271 | 0.3343757 | 1.0000000 |
+
+``` r
+# Create a heatmap
+
+#upper_tri <- matrixcalc::upper.triangle(correlation_auto)
+#melted_cormat <- reshape2::melt(upper_tri, na.rm = TRUE)
+
+melted_cormat <- reshape2::melt(cor(data_gss), na.rm = TRUE)
+
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+     hjust = 1))+
+ coord_fixed() +
+  geom_text(aes(Var2, Var1, label = if_else(value != 0, as.character(round(value, digits = 2)), " ")))
+```
+
+![](gss_eda_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
 # Mean health over A/P/C
 
@@ -141,7 +181,7 @@ data_gss %>%
     ## `summarise()` has grouped output by 'year'. You can override using the
     ## `.groups` argument.
 
-![](gss_eda_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+![](gss_eda_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
 ``` r
 data_gss %>% 
@@ -155,7 +195,7 @@ data_gss %>%
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
     ## argument.
 
-![](gss_eda_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+![](gss_eda_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
 
 # Happiness and health
 

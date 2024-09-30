@@ -67,13 +67,15 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
 
 # Tidyverse and flexible number of histograms
 
+library(patchwork)
+
 # Create list to store ggplot objects
 plot_list <- list()
 
 # Loop through column names and create plots
 for (var in colnames(data_gss)) {
   if (is.numeric(data_gss[[var]])) {  # Only create histograms for numeric columns
-    p <- ggplot(data_gss, aes_string(x = var)) +
+    p <- ggplot(data_gss, aes(x = .data[[var]])) +  # Use .data[[var]] for tidy evaluation
       geom_histogram(bins = 20, fill = "pink", color = "hotpink") +
       theme_minimal()
     
@@ -81,11 +83,43 @@ for (var in colnames(data_gss)) {
   }
 }
 
-# Display plots in a 3x3 grid
-do.call(grid.arrange, c(plot_list, ncol = 3))
+# Combine all plots using patchwork and add a title
+combined_plot <- wrap_plots(plot_list, ncol = 3) +
+  plot_annotation(title = "Histograms of Survey Responses")
+
+# Display the combined plot
+print(combined_plot)
+
 
 
 ```
+
+
+# Correlation Heatmap
+
+```{r}
+correlation_auto <- cor(data_gss)
+knitr::kable(correlation_auto)
+
+# Create a heatmap
+
+#upper_tri <- matrixcalc::upper.triangle(correlation_auto)
+#melted_cormat <- reshape2::melt(upper_tri, na.rm = TRUE)
+
+melted_cormat <- reshape2::melt(cor(data_gss), na.rm = TRUE)
+
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+     hjust = 1))+
+ coord_fixed() +
+  geom_text(aes(Var2, Var1, label = if_else(value != 0, as.character(round(value, digits = 2)), " ")))
+```
+
 
 # Mean health over A/P/C
 
