@@ -339,7 +339,7 @@ Now let's take a look at the trend of people's self-rated health over time, as w
 
 ```{r over_apc}
 
-# Mean health over time, age, and birthyear
+# Mean health over time, age, and birth year
 
 data_gss %>% 
   group_by(year) %>% 
@@ -362,14 +362,23 @@ data_gss %>%
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = cohort, y = mean_health)) +
   geom_line(color = "cornflowerblue") +
-  labs(title = "Cohort: Self-Rated Health by Birthyear",
+  labs(title = "Cohort: Self-Rated Health by Birth Year",
        subtitle = "(all years together)" )
 
 ```
 
-# Some more EDA
+# Cohorts 
+
+Let's explore how each cohort tends to rate their health when at the same age.
 
 ```{r}
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  geom_line()
 
 data_gss %>% 
   mutate(cohort = cut(cohort, breaks = 6)) %>% 
@@ -378,18 +387,10 @@ data_gss %>%
   ggplot(aes(x = year, y = mean_health, color = cohort)) +
   geom_line()
 
-data_gss %>% 
-  mutate(cohort = cut(cohort, breaks = 6)) %>% 
-  group_by(age, cohort) %>% 
-  summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = age, y = mean_health, color = cohort)) +
-  geom_line()
-
-
 
 ```
 
-# Happiness and health
+## Happiness and health
 
 ```{r happiness_and_health}
 
@@ -426,4 +427,5 @@ data_gss %>%
   geom_smooth(method = "lm")
 
 ```
+
 
