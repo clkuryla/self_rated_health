@@ -22,6 +22,12 @@ Christine Lucille Kuryla
 - [Mean health over
   Age/Period/Cohort](#mean-health-over-ageperiodcohort)
 - [Cohorts](#cohorts)
+  - [Interesting and seemingly
+    robust](#interesting-and-seemingly-robust)
+- [Relationship of self-rated health to age, separated out by
+  years](#relationship-of-self-rated-health-to-age-separated-out-by-years)
+- [Regress the age coefficient on
+  year](#regress-the-age-coefficient-on-year)
   - [Happiness and health](#happiness-and-health)
 
 Take a look at GSS dataset, what’s available, some trends, etc.
@@ -475,7 +481,7 @@ data_gss %>%
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
     ## argument.
 
-![](gss_eda_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+![](gss_eda_files/figure-gfm/more_cohorts-1.png)<!-- -->
 
 ``` r
 data_gss %>% 
@@ -487,6 +493,374 @@ data_gss %>%
 ```
 
     ## `summarise()` has grouped output by 'year'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-2.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% 
+  group_by(happy, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = happy, y = mean_health, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'happy'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-3.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = age, y = mean_happy, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-4.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-5.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-6.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'cohort'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-7.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(year, cohort) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'year'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/more_cohorts-8.png)<!-- -->
+
+## Interesting and seemingly robust
+
+Well, this is probably the most interesting graph. Let’s try different
+numbers of categories of age.
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  geom_point()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_health-1.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 10)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_health-2.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 3)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_health-3.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_health-4.png)<!-- -->
+
+# Relationship of self-rated health to age, separated out by years
+
+Well it seems like the spread of self-rated health among ages decreases
+as time goes on (later years). Let’s look at that.
+
+``` r
+# health vs age per year
+data_gss %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)" )
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/health_v_age_per_year-1.png)<!-- -->
+
+# Regress the age coefficient on year
+
+``` r
+library(broom)
+
+# Aggregate slopes
+
+years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+
+# Perform linear regression for each year and extract the coefficient of 'age'
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  do(broom::tidy(lm(health ~ age, data = .))) %>%
+  filter(term == "age") %>%
+  select(year, coef = estimate)
+
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+```
+
+    ## Warning: There was 1 warning in `summarize()`.
+    ## ℹ In argument: `coef = coef(lm(health ~ age, data = cur_data()))["age"]`.
+    ## ℹ In group 1: `year = 1974`.
+    ## Caused by warning:
+    ## ! `cur_data()` was deprecated in dplyr 1.1.0.
+    ## ℹ Please use `pick()` instead.
+
+``` r
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+![](gss_eda_files/figure-gfm/regress_age_coeff-1.png)<!-- -->
+
+``` r
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high)
+
+# View the results with confidence intervals
+print(lm_health_v_age_0)
+```
+
+    ## # A tibble: 28 × 4
+    ## # Groups:   year [28]
+    ##     year    coef conf.low conf.high
+    ##    <dbl>   <dbl>    <dbl>     <dbl>
+    ##  1  1974 -0.0159  -0.0184  -0.0133 
+    ##  2  1976 -0.0151  -0.0175  -0.0126 
+    ##  3  1977 -0.0174  -0.0200  -0.0148 
+    ##  4  1980 -0.0137  -0.0162  -0.0112 
+    ##  5  1982 -0.0142  -0.0164  -0.0119 
+    ##  6  1984 -0.0116  -0.0140  -0.00928
+    ##  7  1985 -0.0140  -0.0165  -0.0116 
+    ##  8  1987 -0.0147  -0.0170  -0.0124 
+    ##  9  1988 -0.0148  -0.0178  -0.0119 
+    ## 10  1989 -0.0120  -0.0148  -0.00924
+    ## # ℹ 18 more rows
+
+``` r
+library(ggplot2)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+![](gss_eda_files/figure-gfm/regress_age_coeff-2.png)<!-- -->
+
+``` r
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = coef ~ year, data = lm_health_v_age_0)
+    ## 
+    ## Residuals:
+    ##        Min         1Q     Median         3Q        Max 
+    ## -0.0022910 -0.0012719 -0.0000069  0.0009998  0.0022720 
+    ## 
+    ## Coefficients:
+    ##               Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) -5.267e-01  3.721e-02  -14.16 9.89e-14 ***
+    ## year         2.585e-04  1.863e-05   13.87 1.58e-13 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.001385 on 26 degrees of freedom
+    ## Multiple R-squared:  0.881,  Adjusted R-squared:  0.8764 
+    ## F-statistic: 192.5 on 1 and 26 DF,  p-value: 1.576e-13
+
+``` r
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](gss_eda_files/figure-gfm/regress_age_coeff-3.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_happy-1.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
+    ## argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_happy-2.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'cohort'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/multiple_cohort_breaks_happy-3.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'cohort'. You can override using the
+    ## `.groups` argument.
+
+![](gss_eda_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+``` r
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, age) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'cohort'. You can override using the
     ## `.groups` argument.
 
 ![](gss_eda_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->

@@ -367,11 +367,15 @@ data_gss %>%
 
 ```
 
+
+
+
+
 # Cohorts 
 
 Let's explore how each cohort tends to rate their health when at the same age.
 
-```{r}
+```{r more_cohorts}
 
 data_gss %>% 
   mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
@@ -387,8 +391,217 @@ data_gss %>%
   ggplot(aes(x = year, y = mean_health, color = cohort)) +
   geom_line()
 
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% 
+  group_by(happy, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = happy, y = mean_health, color = cohort)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = age, y = mean_happy, color = cohort)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(year, cohort) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = cohort)) +
+  geom_line()
 
 ```
+
+
+## Interesting and seemingly robust
+
+Well, this is probably the most interesting graph. Let's try different numbers of categories of age.
+
+```{r multiple_cohort_breaks_health}
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  geom_point()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 10)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 3)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line()
+```
+
+# Relationship of self-rated health to age, separated out by years
+
+Well it seems like the spread of self-rated health among ages decreases as time goes on (later years). Let's look at that.
+
+```{r health_v_age_per_year}
+# health vs age per year
+data_gss %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)" )
+```
+
+# Regress the age coefficient on year
+
+```{r regress_age_coeff}
+
+library(broom)
+
+# Aggregate slopes
+
+years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+
+# Perform linear regression for each year and extract the coefficient of 'age'
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  do(broom::tidy(lm(health ~ age, data = .))) %>%
+  filter(term == "age") %>%
+  select(year, coef = estimate)
+
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high)
+
+# View the results with confidence intervals
+print(lm_health_v_age_0)
+
+library(ggplot2)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r multiple_cohort_breaks_happy}
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = age)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_happy = mean(happy)) %>% 
+  ggplot(aes(x = year, y = mean_happy, color = cohort)) +
+  geom_line()
+```
+
+
+```{r}
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(cohort, age) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  geom_line()
+
+```
+
+
 
 ## Happiness and health
 
