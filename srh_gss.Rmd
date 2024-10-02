@@ -27,10 +27,13 @@ Coded in this analysis (it was recoded from the raw data) as:
 1 - Poor
 
 Other variables used are:
+
 * `age`
   - Age of respondent at time of survey
+  
 * `year`
   - Year of survey
+  
 * `cohort`
   - Birth year of respondent
   

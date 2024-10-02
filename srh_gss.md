@@ -20,7 +20,13 @@ excellent, good, fair, or poor?”
 Coded in this analysis (it was recoded from the raw data) as: 4 -
 Excellent 3 - Good 2 - Fair 1 - Poor
 
-Other variables used are: \* `age` - Age of respondent at time of survey
-\* `year` - Year of survey \* `cohort` - Birth year of respondent
+Other variables used are:
+
+- `age`
+  - Age of respondent at time of survey
+- `year`
+  - Year of survey
+- `cohort`
+  - Birth year of respondent
 
 Additional covariates to come.
