@@ -436,7 +436,7 @@ data_gss %>%
 ```
 
 
-## Interesting and seemingly robust
+# Interesting and seemingly robust
 
 Well, this is probably the most interesting graph. Let's try different numbers of categories of age.
 
