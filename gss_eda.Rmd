@@ -1,5 +1,5 @@
 ---
-title: "GSS EDA - health and covariates"
+title: "Initial GSS EDA and APC - health and covariates"
 author: "Christine Lucille Kuryla"
 date: "2024-09-27"
 output: 
@@ -494,19 +494,23 @@ library(broom)
 
 # Aggregate slopes
 
-years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
 
-# Perform linear regression for each year and extract the coefficient of 'age'
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
 lm_health_v_age_0 <- data_gss %>%
   group_by(year) %>%
-  do(broom::tidy(lm(health ~ age, data = .))) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
   filter(term == "age") %>%
-  select(year, coef = estimate)
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
 
-lm_health_v_age_0 <- data_gss %>%
-  group_by(year) %>%
-  summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0)
 
+# Plot coefficients
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_line() +
   geom_point() +
@@ -517,18 +521,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   ) +
   theme_minimal()
 
-# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals
-lm_health_v_age_0 <- data_gss %>%
-  group_by(year) %>%
-  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
-  filter(term == "age") %>%
-  select(year, coef = estimate, conf.low, conf.high)
-
-# View the results with confidence intervals
-print(lm_health_v_age_0)
-
-library(ggplot2)
-
+# Plot coefficients with CI
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_line() +
   geom_point() +
