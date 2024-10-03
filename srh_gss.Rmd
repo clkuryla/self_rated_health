@@ -1,5 +1,5 @@
 ---
-title: "Self-Rated Health as predicted by Age of Respondent"
+title: "GSS Self-Rated Health as predicted by Age of Respondent"
 author: "Christine Lucille Kuryla"
 date: "2024-10-02"
 output: 
@@ -251,12 +251,40 @@ So basically this shows that as years pass, the predictive power of someone's ag
 
 # ANOVA
 
-```{r anova}
+```{r anova_1}
 
 # Run an anova
 
 anova_model <- aov(health ~ age * year * cohort, data = data_gss)
 summary(anova_model)
+
+# Tukey HSD
+#TukeyHSD(anova_model)
+
+
+# Cut up age/period/cohort to make an anova possible
+
+# Manually create readable labels for cohort
+data_gss_cut <- data_gss %>% 
+  mutate(age_10 = as.factor(cut(age, breaks = 10))) %>%
+  mutate(cohort_10 = as.factor(cut(cohort, breaks = 10, 
+                                   labels = paste0("(", formatC(head(seq(min(cohort), max(cohort), length.out = 11), -1), format = "f", digits = 0), 
+                                                   ",", 
+                                                   formatC(tail(seq(min(cohort), max(cohort), length.out = 11), -1), format = "f", digits = 0), 
+                                                   "]")))) %>%
+  mutate(year_10 = as.factor(cut(year, breaks = 10)))
+
+# Check the output
+data_gss_cut %>% select(cohort_10) %>% ggplot(aes(x = cohort_10)) + geom_bar()
+data_gss_cut %>% select(year_10) %>% ggplot(aes(x = year_10)) + geom_bar()
+data_gss_cut %>% select(age_10) %>% ggplot(aes(x = age_10)) + geom_bar()
+
+# Run an anova
+
+anova_model <- aov(health ~ age_10 * year_10 * cohort_10, data = data_gss_cut)
+summary(anova_model)
+
+# See more ANOVA at the end of the rmd 
 
 ```
 
@@ -386,4 +414,31 @@ data_gss %>%
 
 ```
 
+
+# More ANOVA -- Tukey, QQ-plot, etc
+```{r anova_continued}
+
+
+# Model Diagnostics
+
+# Plot Q-Q plot to check for normality of residuals
+qqnorm(residuals(anova_model))
+qqline(residuals(anova_model), col = "hotpink")
+
+# Shapiro-Wilk normality test
+#shapiro.test(residuals(anova_model))
+
+# Residuals vs Fitted plot
+plot(fitted(anova_model), residuals(anova_model))
+abline(h = 0, col = "red")
+
+# Breusch-Pagan test for homoscedasticity
+#library(lmtest)
+#bptest(anova_model)
+
+
+# Tukey HSD
+
+TukeyHSD(anova_model)
+```
 
