@@ -238,7 +238,16 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
   mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
-  mutate(satfin = 4 - satfin) 
+  mutate(satfin = 4 - satfin) # %>% 
+  # mutate(polviews_extreme = case_match(polviews,
+  #                                      7 ~ 4,
+  #                                      6 ~ 3,
+  #                                      5 ~ 2,
+  #                                      4 ~ 1,
+  #                                      3 ~ 2,
+  #                                      2 ~ 3,
+  #                                      1 ~ 4
+  #                                      ))
 ```
 
 ## Peek at GSS df
