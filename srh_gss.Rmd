@@ -439,6 +439,6 @@ abline(h = 0, col = "red")
 
 # Tukey HSD
 
-TukeyHSD(anova_model)
+#TukeyHSD(anova_model)
 ```
 
