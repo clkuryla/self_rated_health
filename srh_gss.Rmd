@@ -91,6 +91,163 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
 
 
 
+# Self rated health as predicted by age over the years
+
+Let's explore the effect of different cohorts on SRH at certain ages.
+
+## SRH vs year of survey for different ages
+
+In the following figure, I cut the age of participants into 6 groups and plotted the mean of the group's self-rated health for each year (that's what each dot is). As you can qualitatively see, the spread seems to narrow. 
+
+```{r multiple_cohort_breaks_health}
+data_gss %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  geom_point()
+```
+
+This qualitative result is robust to the size of the categorical variables I split "age" into. 
+
+```{r multiple_cohort_breaks_health_2}
+
+par(mfrow = c(2, 2))
+
+p1 <- data_gss %>% 
+  mutate(age = cut(age, breaks = 10)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  labs(title = "SRH for Different Ages over the Years") +
+  geom_line()
+
+p2 <- data_gss %>% 
+  mutate(age = cut(age, breaks = 7)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  labs(title = "SRH for Different Ages over the Years") +
+  geom_line()
+
+p3 <- data_gss %>% 
+  mutate(age = cut(age, breaks = 3)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  labs(title = "SRH for Different Ages over the Years") +
+  geom_line()
+
+p4 <- data_gss %>% 
+  mutate(age = cut(age, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  labs(title = "SRH for Different Ages over the Years") +
+  geom_line()
+
+gridExtra::grid.arrange(p1, p2, p3, p4, nrow=2)
+```
+
+## Relationship of self-rated health to age, separated out by years
+
+Well, it seems like the spread of self-rated health among ages decreases as time goes on (later years). Let's look at that by faceting mean self-rated health vs age by year. 
+
+Note that intuitively, we'd expect it to be a negative slope because older people intuitively should have worse health. 
+
+Notice *the slopes seem to flatten over time.*
+
+```{r health_v_age_per_year}
+# health vs age per year
+data_gss %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)" )
+```
+
+## Regress self-rated health on age, for each year
+
+Let's do a simple linear regression on each self-rated-health vs age, subsetted for each year (the plots on the faceted figure), look at the significance, and plot the coefficients for age with 95% CIs:
+
+
+```{r regress_age_coeff}
+library(broom)
+
+# Aggregate slopes
+
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
+lm_health_v_age_0 <- data_gss %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
+
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0)
+```
+
+Note that every single beta is statistically significant. Now let's visualize it. 
+
+```{r regress_age_coeff_plot}
+# Plot coefficients
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Plot coefficients with CI
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+## Regress the srh vs age coefficients from each year on the year of the survey
+
+The relationship looks surprisingly strong and linear, so let's do another regression of the coefficients on year. It is super statistically significant (which I'm not sure totally how to interpret since it's on coefficients):
+
+```{r regress_age_coeff_on_year}
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+
+```
+
+So basically this shows that as years pass, the predictive power of someone's age on their self-rated health decreases.
 
 # ANOVA
 
@@ -106,6 +263,10 @@ summary(anova_model)
 
 
 # Cohort Effects
+
+## Visualize age profiles by cohort
+
+First let's visualize potential cohort effects.
 
 ```{r cohort_effects}
 data_gss %>% 
@@ -131,8 +292,13 @@ data_gss %>%
   ggplot(aes(x = age, y = mean_health, color = cohort)) +
   labs(title = "Age Profiles by Cohort") +
   geom_line()
+```
 
-# Let's try to see why the oldest sort of looks like the youngest by modeling the trend (seems linear?) and comparing the expected mean health rating at 20, 40, and 60 years of age for the different cohorts.
+## Model srh vs age for each cohort and plot the betas and predicted age values
+
+Let's try to see why the oldest cohort line sort of looks like it lines up with the youngest by modeling the trend of srh vs age (seems linear) and comparing the expected mean health rating at 20, 40, and 60 years of age for the different cohorts, as well as the coefficient.
+
+```{r cohort_effects_continued}
 
 data_gss %>% filter(cohort > 1914 & cohort < 1995) %>% select(cohort) %>% unique() %>% summarise(n())
 # 80
@@ -166,7 +332,7 @@ print(lm_health_v_age_cohorts)
 
 lm_health_v_age_cohorts %>% 
   ggplot(aes(x = cohort_mean, y = beta)) +
-  labs(title = "SRH vs Age for each Cohort") +
+  labs(title = "Estimate for Coefficient for SRH vs Age for each Cohort") +
   geom_point()
 
 lm_health_v_age_cohorts %>% 
@@ -175,7 +341,7 @@ lm_health_v_age_cohorts %>%
   geom_point()
 
  ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_30)) +
-  labs(title = "Predicted SRH at age 20 for each Cohort") +
+  labs(title = "Predicted SRH at age 30 for each Cohort") +
   geom_point()
  
   ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_65)) +
@@ -206,6 +372,8 @@ print(p)
 
 ```
 
+
+# Other
 
 ```{r}
 data_gss %>% 
