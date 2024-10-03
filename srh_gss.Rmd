@@ -2,11 +2,14 @@
 title: "Self-Rated Health as predicted by Age of Respondent"
 author: "Christine Lucille Kuryla"
 date: "2024-10-02"
-output: github_document
+output: 
+  github_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 ```
 
 Here's a summary of the interesting findings from my analysis of self-rated health in the GSS dataset so far. 
@@ -14,9 +17,7 @@ Here's a summary of the interesting findings from my analysis of self-rated heal
 See https://github.com/clkuryla/self_rated_health/blob/main/gss_eda.md for more EDA and details.
 
 * `health`
-The first variable of interest is “health”, which will be the main subject of our analysis.
-
-https://gssdataexplorer.norc.org/variables/437/vshow
+The first variable of interest is “health”, which will be the main subject of our analysis: https://gssdataexplorer.norc.org/variables/437/vshow
 
 Question on survey: “Would you say your own health, in general, is excellent, good, fair, or poor?” 
 
@@ -37,7 +38,184 @@ Other variables used are:
 * `cohort`
   - Birth year of respondent
   
-Additional covariates to come. 
+Additional covariates and analyses to come. 
 
+# Fetch, load, clean, and recode data
+## Fetch GSS data 
+
+```{r fetch_data, eval = FALSE}
+
+# Feel free to modify to play with more covariates and variables.
+
+#install.packages('gssr', repos =  c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+# install.packages('gssrdoc', repos = c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+
+library(gssr)
+library(gssrdoc)
+
+data("gss_all"). # this file is big! 
+
+# It's a bit excessive to download the entire GSS dataset every time we knit, so lets just save some variables of interest and write it out for future use.
+
+data_gss <- as.data.frame(gss_all) %>% 
+  select("year",      # year of survey
+         "cohort",    # birthyear
+         "age",       # age at time of survey
+         "health",    # self-rated health
+         "sex",       # sex
+         "happy",     # self-rated happiness
+         "life",      # is life exciting or dull
+         "educ",      # years of education
+         "polviews",  # 1 extremely liberal, 4 moderate, 7 extremely conservative
+         "class",    # 1 lower, 2 middle, 3 working, 4 upper, 5 no class
+         "satfin"    # 1 pretty well satisfied, 2 more or less satisfied, 3 not satisfied at all
+         )
+
+write_csv(data_gss, "data/extracted_gss_variables.csv")
+
+```
+
+## Load and clean data
+
+Here we'll load our data, clean some unwanted values, and recode the unintuitive variables.
+
+```{r load_and_clean_data}
+data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
+  filter(cohort != 9999) %>% 
+  na.omit() %>% 
+  mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
+  mutate(happy = 4 - happy) %>% # same
+  mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(satfin = 4 - satfin) # same again!
+```
+
+
+
+
+# ANOVA
+
+```{r anova}
+
+# Run an anova
+
+anova_model <- aov(health ~ age * year * cohort, data = data_gss)
+summary(anova_model)
+
+```
+
+
+
+# Cohort Effects
+
+```{r cohort_effects}
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 7)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+  geom_line()
+
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 3)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+  geom_line()
+
+# Let's try to see why the oldest sort of looks like the youngest by modeling the trend (seems linear?) and comparing the expected mean health rating at 20, 40, and 60 years of age for the different cohorts.
+
+data_gss %>% filter(cohort > 1914 & cohort < 1995) %>% select(cohort) %>% unique() %>% summarise(n())
+# 80
+
+lm_health_v_age_cohorts <- data_gss %>%
+  filter(cohort > 1914 & cohort < 1995) %>% 
+  mutate(cohort_cut = cut(cohort, breaks = 40)) %>%   # Create cohort categories
+  group_by(cohort_cut) %>%
+  nest() %>%   # Nest the data within each cohort
+  mutate(
+    model = map(data, ~ lm(health ~ age, data = .x)),   # Fit a model for each cohort
+    predict_20 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 20))),  # Predict for age = 20
+    predict_25 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 25))),
+    predict_30 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 30))),
+    predict_35 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 35))),
+    predict_40 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 40))),
+    predict_45 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 45))),
+    predict_50 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 50))),
+    predict_55 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 55))),
+    predict_60 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 60))),
+    predict_65 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 65))),
+    beta = map2_dbl(model, data, ~ coef(.x)[2])
+  ) %>%
+#  select(cohort_cut, predict_x, slope) %>%  # Select relevant columns %>% 
+  mutate(cohort_mean = mean(as.numeric(unlist(regmatches(cohort_cut, gregexpr("[0-9]+", cohort_cut))))))
+
+# View the results
+print(lm_health_v_age_cohorts)
+
+# Now let's plot it
+
+lm_health_v_age_cohorts %>% 
+  ggplot(aes(x = cohort_mean, y = beta)) +
+  labs(title = "SRH vs Age for each Cohort") +
+  geom_point()
+
+lm_health_v_age_cohorts %>% 
+  ggplot(aes(x = cohort_mean, y = predict_20)) +
+  labs(title = "Predicted SRH at age 20 for each Cohort") +
+  geom_point()
+
+ ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_30)) +
+  labs(title = "Predicted SRH at age 20 for each Cohort") +
+  geom_point()
+ 
+  ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_65)) +
+  labs(title = "Predicted SRH at age 40 for each Cohort") +
+  geom_point()
+
+# Plot many ages
+  
+# Reshape the data: gather all the prediction columns into one long format
+lm_health_long <- lm_health_v_age_cohorts %>%
+  pivot_longer(cols = starts_with("predict"), 
+               names_to = "prediction_age", 
+               values_to = "predicted_srh")
+
+# Create the plot using the long data format
+p <- ggplot(lm_health_long, aes(x = cohort_mean, y = predicted_srh)) +
+  geom_point() +
+  facet_wrap(~prediction_age, ncol = 4) +  # Facet by the different predictions (predict_20, predict_25, etc.)
+  labs(
+    title = "Predicted Self-Rated Health at Various Ages for Each Cohort",
+    x = "Cohort Mean",
+    y = "Predicted Self-Rated Health"
+  )
+
+# Display the combined plot
+print(p)
+
+
+```
+
+
+```{r}
+data_gss %>% 
+  mutate(cohort = cut(cohort, breaks = 8)) %>% # Create cohorts with 6 breaks
+  group_by(year, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = cohort)) +
+  labs(title = "Year Profiles by Cohort") +
+  geom_line()
+
+```
 
 
