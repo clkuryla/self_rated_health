@@ -8,12 +8,27 @@ output: github_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-
+library(broom)
 ```
 
-We have seen pattens in self-rated health in the GSS data. Let's explore the WVS data (https://www.worldvaluessurvey.org/) to see if the pattern appears there as well. 
+We have seen pattens in self-rated health in the GSS data. Let's explore the WVS data, EVS data, and IVS (WVS + IVS) to see if the pattern appears there as well. 
 
-# Variables
+WVS data
+* https://www.worldvaluessurvey.org/
+* 7 survey waves (every 5 years)
+
+EVS data
+* https://search.gesis.org/research_data/ZA7503?doi=10.4232/1.14021 
+* 5 survey waves (every 9 years) 
+
+Integrated Values Survey (IVS)
+* https://www.worldvaluessurvey.org/WVSEVStrend.jsp 
+* EVS and WVS time-series data-sets are released independently by EVS/GESIS and the WVSA/JDS. The Integrated Values Surveys (IVS) dataset 1981-2022 can be constructed by merging the EVS Trend File 1981-2017 (doi:10.4232/1.14021) and the WVS trend 1981-2022 data-set doi:10.14281/18241.27. It is based on the Common EVS/WVS Dictionary (2021) and includes 452 surveys from 115 countries/territories.
+
+# WVS Variables
+
+<details>
+  <summary>**Click to expand and explore the variables of interest, including the coding and the way the question is phrased.**</summary>
 
 S012.- Date interview
 Date of interview YYYYMMDD
@@ -118,6 +133,14 @@ CoW country code alpha
 (COW_ALPHA)
 See annex number 4
 
+</details>
+
+
+
+# Load data, wrangle, and recode data
+
+# WVS
+
 ```{r load_data, eval = FALSE}
 
 # Registration is needed to download the files, so we're just going to have to load them from my local computer
@@ -174,6 +197,8 @@ write_csv(data_wvs_usa, file = "data/wvs_usa.csv")
 
 ```
 
+# Redo GSS analysis
+
 ```{r redo_gss_analysis}
 
 data_wvs_usa <- read_csv("data/wvs_usa.csv") %>% 
@@ -201,7 +226,7 @@ data_wvs_usa %>%
   facet_wrap(~ year) +
   labs(title = "Self-Rated Health By Age (Per Year)" )
 
-library(broom)
+
 
 # Aggregate slopes
 
@@ -269,6 +294,13 @@ data_wvs_usa %>%
   labs(title = "Age Profiles by Cohort") +
   geom_line()
 
+
+
+
+
 ```
+
+
+
 
 

@@ -70,7 +70,7 @@ Review
 * Life Expectancy 
   * https://www.macrotrends.net/global-metrics/countries/USA/united-states/life-expectancy
   * UN: https://population.un.org/wpp/Download/Standard/CSV/ 
-* World Value Survey/other to combine: note there are only 5 waves of WVS and like 7 of other
+* World Value Survey/European Value Survey to combine: note there are only 5 waves of WVS and like 7 of EVS
   * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5420378/
 * NIHS
   * https://www.cdc.gov/nchs/nhis/data-questionnaires-documentation.htm
@@ -79,5 +79,8 @@ Review
 
 * Changes in Self-Rated Health Status by Demographic Characteristics among Adults, 2014-2017
   * * https://www.census.gov/library/working-papers/2024/demo/sehsd-wp2024-09.html
+* Cultural values: can they explain self-reported health? (WVS and x)
+  * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5420378/#CR32
+
 
 * 
