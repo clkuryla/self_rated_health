@@ -33,7 +33,7 @@ Question on survey: "Would you say your own health, in general, is excellent, go
 library(gssr)
 library(gssrdoc)
 
-data("gss_all"). # this file is big! 
+data("gss_all") # this file is big! 
 
 # It's a bit excessive to download the entire GSS dataset every time we knit, so lets just save some variables of interest and write it out for future use.
 
@@ -643,4 +643,28 @@ data_gss %>%
 
 ```
 
+```{r}
+
+
+library(ggpubr)
+
+data_gss %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ polviews, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "polviews") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value) %>% 
+  ggplot(aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  stat_cor(label.x = 2000) +#label.y = 40)+ 
+                   stat_regline_equation()+#label.y = 45) +
+  theme_minimal()
+
+```
 

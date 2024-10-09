@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 6. APC: Interpret the results of the regression 
   * (Unpooled: Formally compare coefficients between time periods)
 7. APC: Explain why the parsimonious model makes sense
-  * Unpooled: Explain results results
+  * Unpooled: Explain results 
 
 # Extra ideas
 * "secret weapon" (coefficent for each years) of "happy" (or w/e) as a predictor of "health"
