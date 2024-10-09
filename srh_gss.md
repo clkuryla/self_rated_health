@@ -328,6 +328,24 @@ statistically significant (which I’m not sure totally how to interpret
 since it’s on coefficients):
 
 ``` r
+# Visualize
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_files/figure-gfm/regress_age_coeff_on_year-1.png)<!-- -->
+
+``` r
 # Perform linear regression of 'coef' (age coefficient) vs 'year'
 lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
 
@@ -354,25 +372,50 @@ summary(lm_coef_vs_year)
     ## Multiple R-squared:  0.881,  Adjusted R-squared:  0.8764 
     ## F-statistic: 192.5 on 1 and 26 DF,  p-value: 1.576e-13
 
+So basically this shows that as years pass, the predictive power of
+someone’s age on their self-rated health decreases. This relationship is
+(super!!!) strong and statitically significant. As seen in the output
+above, the t-stat/p-values and f-stat/p-values are overwhelmingly
+statistically significant. Also look at the RSE and the
+Rsquared/adjusted Rsquared. WILD.
+
+One sort of interesting thing to note is that the change seems super
+gradual and weirdly smooth. It doesn’t really look like something
+specific happened as the years passed that caused an abrupt shift in how
+people of different ages rated their health. It’s (honestly quite
+surprisingly) gradual and very linear looking.
+
+Let’s look at the residuals.
+
 ``` r
-ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
-  labs(
-    title = "Regression of 'Age' Coefficient Over Years",
-    x = "Year",
-    y = "Coefficient of Age"
-  ) +
-  theme_minimal()
+# Let's look at the residuals
+par(mfrow = c(1,1))
+plot(fitted(lm_coef_vs_year), lm_coef_vs_year$residuals)
+abline(0,0)
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
+![](srh_gss_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
-![](srh_gss_files/figure-gfm/regress_age_coeff_on_year-1.png)<!-- -->
+``` r
+qqplot(fitted(lm_coef_vs_year), resid(lm_coef_vs_year))
+```
 
-So basically this shows that as years pass, the predictive power of
-someone’s age on their self-rated health decreases.
+![](srh_gss_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+
+``` r
+qqnorm(resid(lm_coef_vs_year))
+qqline(resid(lm_coef_vs_year))
+```
+
+![](srh_gss_files/figure-gfm/unnamed-chunk-1-3.png)<!-- -->
+
+``` r
+plot(density(resid(lm_coef_vs_year)))
+```
+
+![](srh_gss_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
+
+They seem pretty normal.
 
 # ANOVA
 
@@ -642,7 +685,7 @@ data_gss %>%
     ## `summarise()` has grouped output by 'year'. You can override using the
     ## `.groups` argument.
 
-![](srh_gss_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+![](srh_gss_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
 # More ANOVA – Tukey, QQ-plot, etc
 
