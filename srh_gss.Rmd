@@ -227,12 +227,8 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
 The relationship looks surprisingly strong and linear, so let's do another regression of the coefficients on year. It is super statistically significant (which I'm not sure totally how to interpret since it's on coefficients):
 
 ```{r regress_age_coeff_on_year}
-# Perform linear regression of 'coef' (age coefficient) vs 'year'
-lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
 
-# View the summary of the regression
-summary(lm_coef_vs_year)
-
+# Visualize
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
@@ -244,10 +240,36 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   ) +
   theme_minimal()
 
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
 
 ```
 
-So basically this shows that as years pass, the predictive power of someone's age on their self-rated health decreases.
+So basically this shows that as years pass, the predictive power of someone's age on their self-rated health decreases. This relationship is (super!!!) strong and statitically significant. As seen in the output above, the t-stat/p-values and f-stat/p-values are overwhelmingly statistically significant. Also look at the RSE and the Rsquared/adjusted Rsquared. WILD.
+
+One sort of interesting thing to note is that the change seems super gradual and weirdly smooth. It doesn't really look like something specific happened as the years passed that caused an abrupt shift in how people of different ages rated their health. It's (honestly quite surprisingly) gradual and very linear looking. 
+
+Let's look at the residuals.
+
+```{r}
+
+# Let's look at the residuals
+par(mfrow = c(1,1))
+plot(fitted(lm_coef_vs_year), lm_coef_vs_year$residuals)
+abline(0,0)
+
+qqplot(fitted(lm_coef_vs_year), resid(lm_coef_vs_year))
+
+qqnorm(resid(lm_coef_vs_year))
+qqline(resid(lm_coef_vs_year))
+plot(density(resid(lm_coef_vs_year)))
+
+```
+
+They seem pretty normal.
 
 # ANOVA
 
