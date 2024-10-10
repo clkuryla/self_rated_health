@@ -1,0 +1,128 @@
+---
+title: "Fun Stuff with PCA, etc"
+author: "Christine Lucille Kuryla"
+date: "2024-10-10"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Some PCA Stuff
+
+```{r}
+data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
+  filter(cohort != 9999) %>% 
+  na.omit() %>% 
+  mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
+  mutate(happy = 4 - happy) %>% # same
+  mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(satfin = 4 - satfin) # same again!
+```
+
+
+```{r}
+
+# Load necessary libraries
+library(GGally)
+library(ggplot2)
+
+# Example dataset (using the iris dataset)
+data(iris)
+
+# Perform PCA on the numeric columns of iris
+pca_result <- prcomp(iris[, 1:4], scale. = TRUE)
+
+# Create a dataframe of the first 5 principal components and add the species column
+pc_data <- as.data.frame(pca_result$x[, 1:4])  # Extract first 5 PCs
+pc_data$Species <- iris$Species  # Add the species information to the dataframe
+
+# Use GGally's ggpairs to create the plot and color by species
+ggpairs(pc_data,
+        aes(color = Species),  # Color by species
+        lower = list(continuous = wrap("points", alpha = 0.5)),
+        diag = list(continuous = wrap("densityDiag")),
+        upper = NULL)  # Optional: to remove the upper triangle
+
+
+```
+
+```{r}
+# Perform PCA on the numeric columns of iris
+#pca_result <- prcomp(iris[, 1:4], scale. = TRUE)
+pca_result <- prcomp(data_gss, scale = TRUE)
+
+# Create a dataframe of the first 5 principal components and add the species column
+pc_data <- as.data.frame(pca_result$x[, 1:5])  # Extract first 5 PCs
+pc_data$SRH_factor <- as.factor(data_gss$health)  # Add the species information to the dataframe
+
+pc_data$SRH_factor <- as.factor(pc_data$SRH_factor)
+
+
+# Use GGally's ggpairs to create the plot and color by species
+ggpairs(pc_data,
+        aes(color = SRH_factor),  # Color by species
+        lower = list(continuous = wrap("points", alpha = 0.5)),
+        diag = list(continuous = wrap("densityDiag")),
+        upper = NULL)  # Optional: to remove the upper triangle
+
+
+
+
+
+pc_data$sex_factor <- as.factor(data_gss$sex)  # Add the species information to the dataframe
+
+pc_data$sex_factor <- as.factor(pc_data$sex_factor)
+
+ggpairs(pc_data,
+        aes(color = sex_factor),  # Color by species
+        lower = list(continuous = wrap("points", alpha = 0.5)),
+        diag = list(continuous = wrap("densityDiag")),
+        upper = NULL)  # Optional: to remove the upper triangle
+
+```
+
+
+```{r}
+pca_result$rotation
+
+loadings <- pca_result$rotation
+# Load ggplot2 for visualization
+library(ggplot2)
+library(tidyr)
+
+# Convert the loadings to a data frame for easier plotting
+loadings_df <- as.data.frame(loadings)
+
+# Add the variable names to the loadings
+loadings_df$Variables <- rownames(loadings_df)
+
+# Reshape the data for easier plotting
+loadings_long <- gather(loadings_df, key = "PC", value = "Loadings", -Variables)
+
+# Plot the loadings for each variable on the first two PCs
+ggplot(loadings_long, aes(x = Variables, y = Loadings, fill = PC)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "PCA Loadings for the First Few Principal Components", y = "Loadings", x = "Variables")
+
+ggplot(loadings_long, aes(x = Loadings, y = PC, fill = Variables)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "PCA Loadings for the First Few Principal Components", y = "Loadings", x = "Variables")
+
+library(reshape2)
+# Convert the loadings matrix into a long format for ggplot
+loadings_melted <- melt(loadings)
+
+# Plot the heatmap using ggplot
+ggplot(loadings_melted, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  labs(title = "Heatmap of PCA Loadings", x = "Principal Components", y = "Variables") +
+  theme_minimal()
+
+```
+

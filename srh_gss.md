@@ -424,20 +424,7 @@ They seem pretty normal.
 
 anova_model <- aov(health ~ age * year * cohort, data = data_gss)
 summary(anova_model)
-```
 
-    ##                    Df Sum Sq Mean Sq  F value   Pr(>F)    
-    ## age                 1   1317  1316.9 2041.214  < 2e-16 ***
-    ## year                1     24    24.5   37.936 7.38e-10 ***
-    ## age:year            1    175   175.1  271.449  < 2e-16 ***
-    ## age:cohort          1     26    26.3   40.729 1.77e-10 ***
-    ## year:cohort         1     53    53.2   82.502  < 2e-16 ***
-    ## age:year:cohort     1      3     3.0    4.724   0.0298 *  
-    ## Residuals       39958  25780     0.6                      
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-``` r
 # Tukey HSD
 #TukeyHSD(anova_model)
 
@@ -456,41 +443,14 @@ data_gss_cut <- data_gss %>%
 
 # Check the output
 data_gss_cut %>% select(cohort_10) %>% ggplot(aes(x = cohort_10)) + geom_bar()
-```
-
-![](srh_gss_files/figure-gfm/anova_1-1.png)<!-- -->
-
-``` r
 data_gss_cut %>% select(year_10) %>% ggplot(aes(x = year_10)) + geom_bar()
-```
-
-![](srh_gss_files/figure-gfm/anova_1-2.png)<!-- -->
-
-``` r
 data_gss_cut %>% select(age_10) %>% ggplot(aes(x = age_10)) + geom_bar()
-```
 
-![](srh_gss_files/figure-gfm/anova_1-3.png)<!-- -->
-
-``` r
 # Run an anova
 
 anova_model <- aov(health ~ age_10 * year_10 * cohort_10, data = data_gss_cut)
 summary(anova_model)
-```
 
-    ##                      Df Sum Sq Mean Sq F value   Pr(>F)    
-    ## age_10                9   1332  147.99 229.949  < 2e-16 ***
-    ## year_10               9     84    9.36  14.536  < 2e-16 ***
-    ## cohort_10             9    235   26.13  40.607  < 2e-16 ***
-    ## age_10:year_10       81     86    1.06   1.649 0.000219 ***
-    ## age_10:cohort_10     35     23    0.67   1.043 0.399200    
-    ## year_10:cohort_10    31     11    0.36   0.553 0.979071    
-    ## Residuals         39790  25607    0.64                     
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-``` r
 # See more ANOVA at the end of the rmd 
 ```
 
@@ -695,22 +655,14 @@ data_gss %>%
 # Plot Q-Q plot to check for normality of residuals
 qqnorm(residuals(anova_model))
 qqline(residuals(anova_model), col = "hotpink")
-```
 
-![](srh_gss_files/figure-gfm/anova_continued-1.png)<!-- -->
-
-``` r
 # Shapiro-Wilk normality test
 #shapiro.test(residuals(anova_model))
 
 # Residuals vs Fitted plot
 plot(fitted(anova_model), residuals(anova_model))
 abline(h = 0, col = "red")
-```
 
-![](srh_gss_files/figure-gfm/anova_continued-2.png)<!-- -->
-
-``` r
 # Breusch-Pagan test for homoscedasticity
 #library(lmtest)
 #bptest(anova_model)

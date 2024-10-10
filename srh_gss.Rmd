@@ -273,7 +273,7 @@ They seem pretty normal.
 
 # ANOVA
 
-```{r anova_1}
+```{r anova_1, eval = FALSE}
 
 # Run an anova
 
@@ -438,7 +438,7 @@ data_gss %>%
 
 
 # More ANOVA -- Tukey, QQ-plot, etc
-```{r anova_continued}
+```{r anova_continued, eval = FALSE}
 
 
 # Model Diagnostics
