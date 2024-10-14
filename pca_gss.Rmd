@@ -126,3 +126,11 @@ ggplot(loadings_melted, aes(x = Var2, y = Var1, fill = value)) +
 
 ```
 
+```{r}
+biplot(pca_result, choices = 1:2)
+biplot(pca_result, choices = 2:3)
+biplot(pca_result, choices = 3:4)
+biplot(pca_result, choices = 5:6)
+
+```
+

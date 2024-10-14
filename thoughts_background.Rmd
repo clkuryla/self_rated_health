@@ -72,5 +72,7 @@ Review
   * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5420378/#CR32
 * The Increasing Predictive Validity of Self Rated Health (uses GSS)
 	* https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3899056/
+* Personality and self-rated health across eight cohort studies
+  * https://www.sciencedirect.com/science/article/abs/pii/S0277953620304640 
 
 * 
