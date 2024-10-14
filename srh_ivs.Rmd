@@ -135,6 +135,35 @@ See annex number 4
 
 </details>
 
+# Common variables
+
+A009	State of health (subjective)
+A008	Feeling of happiness
+S020	Year survey
+X002	Year of birth
+X003	Age
+X001	Sex
+X051	Ethnic group
+E033	Self positioning in political scale
+B008	Protecting environment vs. Economic growth
+S012	Date interview [YYYYMMDD]
+
+S003	Country (ISO 3166-1 Numeric code)
+COW_ALPHA	CoW country code alpha
+COW_NUM	Country (CoW Numeric code)
+
+A165	Most people can be trusted
+A170	Satisfaction with your life
+A173	How much freedom of choice and control
+
+X002_02	Respondent born in [country]
+X002_02A	Respondents country of birth: ISO 3166-1 code
+X002_02B	Respondents country of birth: ISO 3166-1/3 Alpha code
+X002_03	Year in which respondent came to live in [country]
+X003R	Age recoded
+X003R2	Age recoded (3 intervals)
+
+
 
 
 # Load data, wrangle, and recode data
@@ -174,9 +203,11 @@ data_wvs1 <- data_wvs %>%
     mutate(age = X003) %>% 
     mutate(sex = X001) %>% 
     mutate(cohort = X002) %>% 
-    mutate(year = as.numeric(str_sub(as.character(S022), start = 1, end = 4))) %>% 
+    mutate(year = as.numeric(str_sub(as.character(S022), start = 1, end = 4))) %>%
     mutate(health = A009) %>% 
     mutate(happy = A008) %>% 
+    mutate(year = as.numeric(str_sub(as.character(S022), start = 1, end = 4))) %>% 
+    mutate(year2 = as.numeric(str_sub(as.character(S023), start = 1, end = 4))) %>% 
     mutate(health = 6 - health) %>% 
     mutate(happy = 5 - happy) #%>% 
    # select(age, cohort, year, health, happy, sex, country_code)
@@ -197,16 +228,127 @@ write_csv(data_wvs_usa, file = "data/wvs_usa.csv")
 
 ```
 
+
+
+
+
+
+# EVS
+
+```{r evs_data, eval = FALSE}
+
+library(haven)
+
+data_evs_all <- read_dta("big_data/EVS/ZA7503_v3-0-0.dta")
+
+data_evs_selected <- data_evs_all %>% 
+  select(A009,  	# State of health (subjective)
+        A008,  	#	Feeling of happiness
+        S020,  	#	Year survey
+        X002,  	#	Year of birth
+        X003,  	#	Age
+        X001,  	#	Sex
+        X051,  	#	Ethnic group
+        E033,  	#	Self positioning in political scale
+        B008,  	#	Protecting environment vs. Economic growth
+        S012,  	#	Date interview [YYYYMMDD]
+        S003,  	#	Country (ISO 3166-1 Numeric code)
+   #     COW_ALPHA,  	#	CoW country code alpha
+        COW_NUM,  	#	Country (CoW Numeric code)
+        A165,  	#	Most people can be trusted
+        A170,  	#	Satisfaction with your life
+        A173,  	#	How much freedom of choice and control
+        X002_02,  	#	Respondent born in [country]
+        X002_02A,  	#	Respondents country of birth: ISO 3166-1 code
+        X002_02B,  	#	Respondents country of birth: ISO 3166-1/3 Alpha code
+        X002_03,  	#	Year in which respondent came to live in [country]
+        X003R,  	#	Age recoded
+        X003R2  	#	Age recoded (3 intervals)
+  )
+
+data_evs_recoded <- data_evs_selected %>% 
+    mutate(country_code = S003) %>% 
+    mutate(age = X003) %>% 
+    mutate(sex = X001) %>% 
+    mutate(cohort = X002) %>% 
+#    mutate(year = as.numeric(str_sub(as.character(S022), start = 1, end = 4))) %>%
+    mutate(health = A009) %>% 
+    mutate(happy = A008) %>% 
+  #  mutate(year = as.numeric(str_sub(as.character(S022), start = 1, end = 4))) %>% 
+ #   mutate(year = as.numeric(str_sub(as.character(S012), start = 1, end = 4))) %>% 
+  #  mutate(year2 = as.numeric(str_sub(as.character(S023), start = 1, end = 4))) %>% 
+    mutate(health = 6 - health) %>% 
+    mutate(happy = 5 - happy) %>% 
+    mutate(year = S020)  	#	Year survey #%>% 
+   # select(age, cohort, year, health, happy, sex, country_code)
+
+table(data_evs_recoded$year)
+
+data_evs_usa <- data_evs_recoded %>% 
+  filter(country_code == 840 |   
+       #  COUNTRY_ALPHA == "USA" |
+         COW_NUM == 2
+       #  COW_ALPHA == "USA"
+         )
+
+data_evs_world <- data_evs_recoded
+
+table(data_evs_usa$year)
+
+table(data_evs_world$year)
+
+write_csv(data_evs_world, file = "data/data_evs_world.csv")
+
+
+write_csv(data_evs_usa, "data/evs_usa.csv")
+
+```
+
+
+
 # Redo GSS analysis
 
 ```{r redo_gss_analysis}
-
 data_wvs_usa <- read_csv("data/wvs_usa.csv") %>% 
   filter(health %in% c(1, 2, 3, 4, 5))
+
+data_evs_usa <- read_csv("data/evs_usa.csv") %>% 
+  filter(health %in% c(1, 2, 3, 4, 5))
+
+table(data_evs_usa$happy)
+# CHECK THE CODING
+table(data_wvs_usa$happy)
+# CHECK THE CODING
 
 hist(data_wvs_usa$health)
 hist(data_wvs_usa$age)
 
+hist(data_evs_usa$health)
+hist(data_evs_usa$age)
+
+evs_select <- data_evs_usa %>% 
+                             select(age, year, cohort, sex, health, happy) 
+wvs_select <- data_wvs_usa %>% 
+                             select(age, year, cohort, sex, health, happy)
+
+data_ivs_usa <- rbind(evs_select, wvs_select) %>% 
+  filter(cohort > 1700) %>% 
+  filter(sex %in% c(1,2)) %>% 
+  filter(happy %in% c(1, 2, 3, 4)) %>%  # check the coding!
+  filter(health %in% c(1, 2, 3, 4, 5))
+
+hist(data_ivs_usa$age)
+hist(data_ivs_usa$year)
+hist(data_ivs_usa$cohort)
+hist(data_ivs_usa$sex)
+hist(data_ivs_usa$health)
+hist(data_ivs_usa$happy)
+
+
+```
+
+
+```{r redo_gss_analysis_wvs}
 data_wvs_usa %>% 
   filter(age > 18, age < 90) %>% 
   mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
@@ -301,6 +443,102 @@ data_wvs_usa %>%
 ```
 
 
+# IVS (WVS + EVS)
+```{r redo_gss_analysis_ivs}
+
+
+data_ivs_usa %>% 
+  filter(age > 18, age < 90) %>% 
+  mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  geom_point()
+
+
+# health vs age per year
+data_ivs_usa %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)" )
+
+
+
+# Aggregate slopes
+
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
+lm_health_v_age_0 <- data_ivs_usa %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
+
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0)
+
+# Plot coefficients
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Plot coefficients with CI
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+data_ivs_usa %>% 
+  filter(cohort > 1800, cohort < 2020) %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+  geom_line()
+
+
+
+
+
+```
 
 
 
