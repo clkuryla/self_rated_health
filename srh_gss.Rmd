@@ -106,7 +106,11 @@ data_gss %>%
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = age)) +
   geom_line() +
-  geom_point()
+  geom_point() +
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "GSS Dataset",
+       x = "Average SRH", 
+       y = "Year") 
 ```
 
 This qualitative result is robust to the size of the categorical variables I split "age" into. 
@@ -166,7 +170,11 @@ data_gss %>%
   ggplot(aes(x = age, y = mean_health)) +
   geom_line(color = "cornflowerblue") +
   facet_wrap(~ year) +
-  labs(title = "Self-Rated Health By Age (Per Year)" )
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "GSS Dataset",
+       x = "Age of Respondent", 
+       y = "Average SRH",
+       )
 ```
 
 ## Regress self-rated health on age, for each year
@@ -193,7 +201,8 @@ lm_health_v_age_0 <- data_gss %>%
 
 # View the results with confidence intervals, se, t statistic, and p value
 # print(lm_health_v_age_0)
-knitr::kable(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0, 
+             caption = "GSS Dataset")
 ```
 
 Note that every single beta is statistically significant. Now let's visualize it. 
@@ -204,6 +213,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -216,6 +226,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
   labs(
     title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -235,6 +246,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +

@@ -166,9 +166,163 @@ X003R2	Age recoded (3 intervals)
 
 
 
+
+
+# IVS
+
+# Import, clean, format data from previous files
+
+```{r redo_gss_analysis}
+data_wvs_usa <- read_csv("data/wvs_usa.csv") %>% 
+  filter(health %in% c(1, 2, 3, 4, 5))
+
+data_evs_usa <- read_csv("data/evs_usa.csv") %>% 
+  filter(health %in% c(1, 2, 3, 4, 5))
+
+table(data_evs_usa$happy)
+# CHECK THE CODING
+table(data_wvs_usa$happy)
+# CHECK THE CODING
+
+hist(data_wvs_usa$health)
+hist(data_wvs_usa$age)
+
+hist(data_evs_usa$health)
+hist(data_evs_usa$age)
+
+evs_select <- data_evs_usa %>% 
+                             select(age, year, cohort, sex, health, happy) 
+wvs_select <- data_wvs_usa %>% 
+                             select(age, year, cohort, sex, health, happy)
+
+data_ivs_usa <- rbind(evs_select, wvs_select) %>% 
+  filter(cohort > 1700) %>% 
+  filter(sex %in% c(1,2)) %>% 
+  filter(happy %in% c(1, 2, 3, 4)) %>%  # check the coding!
+  filter(health %in% c(1, 2, 3, 4, 5))
+
+hist(data_ivs_usa$age)
+hist(data_ivs_usa$year)
+hist(data_ivs_usa$cohort)
+hist(data_ivs_usa$sex)
+hist(data_ivs_usa$health)
+hist(data_ivs_usa$happy)
+
+
+```
+
+
+
+# IVS (WVS + EVS) Replicate GSS Analysis for New Data
+```{r redo_gss_analysis_ivs}
+
+
+data_ivs_usa %>% 
+  filter(age > 18, age < 90) %>% 
+  mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "IVS Dataset",
+       x = "Average SRH", 
+       y = "Year") +
+  geom_point() 
+
+
+# health vs age per year
+data_ivs_usa %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "IVS Dataset",
+       x = "Average SRH", 
+       y = "Age of Respondent")
+
+
+# Aggregate slopes
+
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
+lm_health_v_age_0 <- data_ivs_usa %>%
+  group_by(year) %>%
+  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
+
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0,
+             caption = "IVS Dataset")
+
+# Plot coefficients
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "IVS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Plot coefficients with CI
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "IVS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "IVS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+data_ivs_usa %>% 
+  filter(cohort > 1800, cohort < 2020) %>% 
+  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort", 
+       subtitle = "IVS Dataset") +
+  geom_line()
+
+
+
+```
+
+
 # Load data, wrangle, and recode data
 
-# WVS
+## WVS
 
 ```{r load_data, eval = FALSE}
 
@@ -229,11 +383,7 @@ write_csv(data_wvs_usa, file = "data/wvs_usa.csv")
 ```
 
 
-
-
-
-
-# EVS
+## EVS
 
 ```{r evs_data, eval = FALSE}
 
@@ -305,50 +455,9 @@ write_csv(data_evs_usa, "data/evs_usa.csv")
 ```
 
 
+# Redo GSS analysis for WVS
 
-# Redo GSS analysis
-
-```{r redo_gss_analysis}
-data_wvs_usa <- read_csv("data/wvs_usa.csv") %>% 
-  filter(health %in% c(1, 2, 3, 4, 5))
-
-data_evs_usa <- read_csv("data/evs_usa.csv") %>% 
-  filter(health %in% c(1, 2, 3, 4, 5))
-
-table(data_evs_usa$happy)
-# CHECK THE CODING
-table(data_wvs_usa$happy)
-# CHECK THE CODING
-
-hist(data_wvs_usa$health)
-hist(data_wvs_usa$age)
-
-hist(data_evs_usa$health)
-hist(data_evs_usa$age)
-
-evs_select <- data_evs_usa %>% 
-                             select(age, year, cohort, sex, health, happy) 
-wvs_select <- data_wvs_usa %>% 
-                             select(age, year, cohort, sex, health, happy)
-
-data_ivs_usa <- rbind(evs_select, wvs_select) %>% 
-  filter(cohort > 1700) %>% 
-  filter(sex %in% c(1,2)) %>% 
-  filter(happy %in% c(1, 2, 3, 4)) %>%  # check the coding!
-  filter(health %in% c(1, 2, 3, 4, 5))
-
-hist(data_ivs_usa$age)
-hist(data_ivs_usa$year)
-hist(data_ivs_usa$cohort)
-hist(data_ivs_usa$sex)
-hist(data_ivs_usa$health)
-hist(data_ivs_usa$happy)
-
-
-```
-
-
-```{r redo_gss_analysis_wvs}
+```{r redo_gss_analysis_wvs, eval = FALSE}
 data_wvs_usa %>% 
   filter(age > 18, age < 90) %>% 
   mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
@@ -441,104 +550,4 @@ data_wvs_usa %>%
 
 
 ```
-
-
-# IVS (WVS + EVS)
-```{r redo_gss_analysis_ivs}
-
-
-data_ivs_usa %>% 
-  filter(age > 18, age < 90) %>% 
-  mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
-  group_by(age, year) %>% 
-  summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = year, y = mean_health, color = age)) +
-  geom_line() +
-  geom_point()
-
-
-# health vs age per year
-data_ivs_usa %>% 
-  group_by(age, year) %>% 
-  summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = age, y = mean_health)) +
-  geom_line(color = "cornflowerblue") +
-  facet_wrap(~ year) +
-  labs(title = "Self-Rated Health By Age (Per Year)" )
-
-
-
-# Aggregate slopes
-
-# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
-# lm_health_v_age_0 <- data_gss %>%
-#   group_by(year) %>%
-#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
-
-# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
-lm_health_v_age_0 <- data_ivs_usa %>%
-  group_by(year) %>%
-  do(tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
-  filter(term == "age") %>%
-  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
-
-# View the results with confidence intervals, se, t statistic, and p value
-# print(lm_health_v_age_0)
-knitr::kable(lm_health_v_age_0)
-
-# Plot coefficients
-ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
-  geom_point() +
-  labs(
-    title = "Change in 'Age' Coefficient Over Years",
-    x = "Year",
-    y = "Coefficient of Age"
-  ) +
-  theme_minimal()
-
-# Plot coefficients with CI
-ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
-  geom_line() +
-  geom_point() +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
-  labs(
-    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
-    x = "Year",
-    y = "Coefficient of Age"
-  ) +
-  theme_minimal()
-
-# Perform linear regression of 'coef' (age coefficient) vs 'year'
-lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
-
-# View the summary of the regression
-summary(lm_coef_vs_year)
-
-ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
-  labs(
-    title = "Regression of 'Age' Coefficient Over Years",
-    x = "Year",
-    y = "Coefficient of Age"
-  ) +
-  theme_minimal()
-
-data_ivs_usa %>% 
-  filter(cohort > 1800, cohort < 2020) %>% 
-  mutate(cohort = cut(cohort, breaks = 4)) %>% # Create cohorts with 6 breaks
-  group_by(age, cohort) %>% 
-  summarize(mean_health = mean(health)) %>% 
-  ggplot(aes(x = age, y = mean_health, color = cohort)) +
-  labs(title = "Age Profiles by Cohort") +
-  geom_line()
-
-
-
-
-
-```
-
-
 

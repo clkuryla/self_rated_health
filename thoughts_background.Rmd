@@ -54,6 +54,7 @@ Review
 
 * GSS: https://gssdataexplorer.norc.org/about 
   * here's one distilled thing to check out: https://gss.norc.org/content/dam/gss/get-documentation/pdf/other/R1%20Release%20Variables.pdf 
+  * Apparently can combine with some mortality data somehow
 * berkeley thing
 * HRS - https://hrs.isr.umich.edu/data-products 
 * Life Expectancy 
@@ -63,6 +64,10 @@ Review
   * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5420378/
 * NIHS
   * https://www.cdc.gov/nchs/nhis/data-questionnaires-documentation.htm
+* BRFSS
+  * 1989 - present, but a somewhat messy dataset. They added cell phones after 2011 and that causes some problems. 
+  * https://www.cdc.gov/brfss/data_documentation/index.htm
+  * Has other DBs, including GIS, maybe morbidity/mortality?
 
 # Background Research on Self-Rated Health
 
