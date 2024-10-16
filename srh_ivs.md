@@ -219,7 +219,11 @@ data_ivs_usa %>%
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = age)) +
   geom_line() +
-  geom_point()
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "IVS Dataset",
+       x = "Average SRH", 
+       y = "Year") +
+  geom_point() 
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
@@ -235,7 +239,10 @@ data_ivs_usa %>%
   ggplot(aes(x = age, y = mean_health)) +
   geom_line(color = "cornflowerblue") +
   facet_wrap(~ year) +
-  labs(title = "Self-Rated Health By Age (Per Year)" )
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "IVS Dataset",
+       x = "Average SRH", 
+       y = "Age of Respondent")
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
@@ -260,7 +267,8 @@ lm_health_v_age_0 <- data_ivs_usa %>%
 
 # View the results with confidence intervals, se, t statistic, and p value
 # print(lm_health_v_age_0)
-knitr::kable(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0,
+             caption = "IVS Dataset")
 ```
 
 | year |       coef |   conf.low |  conf.high |        se | t_statistic |   p_value |
@@ -273,12 +281,15 @@ knitr::kable(lm_health_v_age_0)
 | 2011 | -0.0066024 | -0.0084288 | -0.0047760 | 0.0009313 |   -7.089158 | 0.0000000 |
 | 2017 | -0.0010629 | -0.0030305 |  0.0009047 | 0.0010034 |   -1.059309 | 0.2895584 |
 
+IVS Dataset
+
 ``` r
 # Plot coefficients
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "IVS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -295,6 +306,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
   labs(
     title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "IVS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -337,6 +349,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "IVS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -354,7 +367,8 @@ data_ivs_usa %>%
   group_by(age, cohort) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = age, y = mean_health, color = cohort)) +
-  labs(title = "Age Profiles by Cohort") +
+  labs(title = "Age Profiles by Cohort", 
+       subtitle = "IVS Dataset") +
   geom_line()
 ```
 

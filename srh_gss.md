@@ -130,7 +130,11 @@ data_gss %>%
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = age)) +
   geom_line() +
-  geom_point()
+  geom_point() +
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "GSS Dataset",
+       x = "Average SRH", 
+       y = "Year") 
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
@@ -220,7 +224,11 @@ data_gss %>%
   ggplot(aes(x = age, y = mean_health)) +
   geom_line(color = "cornflowerblue") +
   facet_wrap(~ year) +
-  labs(title = "Self-Rated Health By Age (Per Year)" )
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "GSS Dataset",
+       x = "Age of Respondent", 
+       y = "Average SRH",
+       )
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
@@ -253,7 +261,8 @@ lm_health_v_age_0 <- data_gss %>%
 
 # View the results with confidence intervals, se, t statistic, and p value
 # print(lm_health_v_age_0)
-knitr::kable(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0, 
+             caption = "GSS Dataset")
 ```
 
 | year |       coef |   conf.low |  conf.high |        se | t_statistic |   p_value |
@@ -287,6 +296,8 @@ knitr::kable(lm_health_v_age_0)
 | 2021 | -0.0027071 | -0.0044122 | -0.0010020 | 0.0008695 |   -3.113335 | 0.0018717 |
 | 2022 | -0.0043263 | -0.0061604 | -0.0024923 | 0.0009352 |   -4.625959 | 0.0000040 |
 
+GSS Dataset
+
 Note that every single beta is statistically significant. Now let’s
 visualize it.
 
@@ -296,6 +307,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -312,6 +324,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
   labs(
     title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
@@ -335,6 +348,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
   ) +
