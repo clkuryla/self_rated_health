@@ -1,0 +1,387 @@
+---
+title: "SRH BRFSS"
+author: "Christine Lucille Kuryla"
+date: "2024-10-18"
+output: 
+  github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(broom)
+```
+
+
+ Note: 2003 was weird with age so skipping for now
+
+```{r}
+# Load packages
+library(haven)   # For reading SAS Transport files
+library(dplyr)   # For data manipulation
+library(survey)  # For survey data analysis
+```
+
+# Load and wrangle data 
+### Load just minimum variables 2011 - 2023
+
+```{r, eval = FALSE}
+# Function to load and process BRFSS data for a given year
+process_brfss_data_2011_2023 <- function(year) {
+  # Construct the file name based on the year
+  file_name <- paste0("LLCP", year, ".XPT")
+  
+  # Read the data
+  data <- read_xpt(file.path("big_data","BRFSS",file_name))
+  
+  # Select relevant variables
+  data_selected <- data %>%
+    select(
+   #   _AGE80,        # Age
+      SEQNO,
+      `_AGEG5YR`,
+  #    SEX1,         # Sex
+  #    X_BIRTHYR, # Year of Birth
+      IYEAR,         # Survey Year
+   #   WEIGHT, #SURVEY WEITHT
+  #    LADULT, #over 18
+      GENHLTH )#,        # Self-rated health
+     # EDUCA ,                # Education level
+      # INCOME2,              # Income level
+      # MARITAL,              # Marital status
+      # EMPLOY1,              # Employment status
+      # EXERANY2,             # Exercise activity
+    #  X_RACEGR3,     # Race/Ethnicity
+     # X_HISPANC,  # Hispanic Origin
+    #  COMORBIDITIES = X_RFHLTH) # Health status flag
+  # Recode variables as necessary
+  # data_clean <- data_selected %>%
+  #   mutate(
+  #     SEX = recode(SEX, `1` = "Male", `2` = "Female"),
+  #     SRH = recode(SRH,
+  #                  `1` = "Excellent",
+  #                  `2` = "Very Good",
+  #                  `3` = "Good",
+  #                  `4` = "Fair",
+  #                  `5` = "Poor")
+  #     # Add more recoding as needed
+     #)
+  
+  data_modified <- data_selected %>% 
+    mutate(id = as.numeric(SEQNO),
+           age = as.numeric(`_AGEG5YR`),
+           year = as.numeric(IYEAR),
+           health = 6 - as.numeric(GENHLTH)
+           ) %>% 
+    filter(health %in% 1:5,
+           age %in% 1:12) %>% 
+    mutate(age = case_match(age,
+                          1 ~ ((18+24)/2),
+                          2 ~ ((25+29)/2),
+                          3 ~ ((30+34)/2),
+                          4 ~ ((35+39)/2),
+                          5 ~ ((40+44)/2),
+                          6 ~ ((45+49)/2),
+                          7 ~ ((50+54)/2),
+                          8 ~ ((55+59)/2),
+                          9 ~ ((60+64)/2),
+                          10 ~ ((65+69)/2),
+                          11 ~ ((70+74)/2),
+                          12 ~ ((75+79)/2) #,
+                          #13 ~ ((18+24)/2), # 80 or older
+                          )
+    ) %>% 
+    mutate(cohort = year - age) %>% 
+    select(id, age, year, cohort, health)
+    
+  print(data_modified$year)
+  return(data_modified)
+}
+
+# Load data for years 2018 to 2020 as an example
+years <- 2011:2023
+brfss_list <- lapply(years, process_brfss_data_2011_2023)
+brfss_data_2011_2023 <- bind_rows(brfss_list)
+
+table(brfss_data_2011_2023$year)
+table(brfss_data_2011_2023$cohort)
+
+# write_csv(brfss_data_2011_2023, "big_data/BRFSS/brfss_data_2011_2023_recoded_min.csv")
+
+# 
+# data_brfss <- brfss_data %>% 
+#   filter(`_AGEG5YR` %in% 1:12) %>% 
+#   mutate(id = SEQNO,
+#          age = `_AGEG5YR`,
+#          year = as.numeric(IYEAR)) %>% 
+#   mutate(age = case_match(age,
+#                           1 ~ ((18+24)/2),
+#                           2 ~ ((25+29)/2),
+#                           3 ~ ((30+34)/2),
+#                           4 ~ ((35+39)/2),
+#                           5 ~ ((40+44)/2),
+#                           6 ~ ((45+49)/2),
+#                           7 ~ ((50+54)/2),
+#                           8 ~ ((55+59)/2),
+#                           9 ~ ((60+64)/2),
+#                           10 ~ ((65+69)/2),
+#                           11 ~ ((70+74)/2),
+#                           12 ~ ((75+79)/2) #,
+#                           #13 ~ ((18+24)/2), # 80 or older
+#                           )
+#          ) %>% 
+#   mutate(health = 6 - GENHLTH,
+#          cohort = year - age ) %>% 
+# select(id, age, year, cohort, health)
+
+
+
+```
+
+### Load just minimum variables 2004 - 2010 and combine
+
+```{r, eval = FALSE}
+
+# Function to load and process BRFSS data for a given year
+process_brfss_data_2004_2010 <- function(year) {
+  # Construct the file name based on the year
+  file_name <- paste0("CDBRFS", year, ".XPT")
+  
+  # Read the data
+  data <- read_xpt(file.path("big_data","BRFSS",file_name))
+  
+  # Select relevant variables
+  data_selected <- data %>%
+    select(
+   #   _AGE80,        # Age
+      SEQNO,
+      `_AGEG5YR`,
+  #    SEX1,         # Sex
+  #    X_BIRTHYR, # Year of Birth
+      IYEAR,         # Survey Year
+   #   WEIGHT, #SURVEY WEITHT
+  #    LADULT, #over 18
+      GENHLTH )#,        # Self-rated health
+     # EDUCA ,                # Education level
+      # INCOME2,              # Income level
+      # MARITAL,              # Marital status
+      # EMPLOY1,              # Employment status
+      # EXERANY2,             # Exercise activity
+    #  X_RACEGR3,     # Race/Ethnicity
+     # X_HISPANC,  # Hispanic Origin
+    #  COMORBIDITIES = X_RFHLTH) # Health status flag
+  # Recode variables as necessary
+  # data_clean <- data_selected %>%
+  #   mutate(
+  #     SEX = recode(SEX, `1` = "Male", `2` = "Female"),
+  #     SRH = recode(SRH,
+  #                  `1` = "Excellent",
+  #                  `2` = "Very Good",
+  #                  `3` = "Good",
+  #                  `4` = "Fair",
+  #                  `5` = "Poor")
+  #     # Add more recoding as needed
+     #)
+  
+  data_modified <- data_selected %>% 
+    mutate(id = as.numeric(SEQNO),
+           age = as.numeric(`_AGEG5YR`),
+           year = as.numeric(IYEAR),
+           health = 6 - as.numeric(GENHLTH)
+           ) %>% 
+    filter(health %in% 1:5,
+           age %in% 1:12) %>% 
+    mutate(age = case_match(age,
+                          1 ~ ((18+24)/2),
+                          2 ~ ((25+29)/2),
+                          3 ~ ((30+34)/2),
+                          4 ~ ((35+39)/2),
+                          5 ~ ((40+44)/2),
+                          6 ~ ((45+49)/2),
+                          7 ~ ((50+54)/2),
+                          8 ~ ((55+59)/2),
+                          9 ~ ((60+64)/2),
+                          10 ~ ((65+69)/2),
+                          11 ~ ((70+74)/2),
+                          12 ~ ((75+79)/2) #,
+                          #13 ~ ((18+24)/2), # 80 or older
+                          )
+    ) %>% 
+    mutate(cohort = year - age) %>% 
+    select(id, age, year, cohort, health)
+    
+  print(data_modified$year)
+  return(data_modified)
+}
+
+# Load data for years 2018 to 2020 as an example
+years <- c("04", "05","06","07","08","09","10")
+brfss_list <- lapply(years, process_brfss_data_2004_2010)
+brfss_data_2004_2010 <- bind_rows(brfss_list)
+
+table(brfss_data_2004_2010$year)
+table(brfss_data_2004_2010$cohort)
+
+# write_csv(brfss_data_2004_2010, "big_data/BRFSS/brfss_data_2004_2010_recoded_min.csv")
+
+data_brfss_2004_2023 <- rbind(brfss_data_2004_2010, brfss_data_2011_2023)
+
+data_brfss_2004_2023 <- data_brfss_2004_2023 %>% 
+  filter(year != "always")
+
+table(data_brfss_2004_2023$year)
+table(data_brfss_2004_2023$cohort)
+
+# write_csv(data_brfss_2004_2023, "big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv")
+
+```
+
+### 1990-2003: To do
+
+```{r fyi, eval = FALSE}
+
+# brfss 2003, 2001
+
+# variable: AGE
+# 7 : do not know/refused
+# 9 : refused
+# 18 - 24
+# 25 - 34
+# 35 - 44
+# 45 - 54
+# 55 - 64
+# 65 - 99
+
+# same for 2004, but they also have imputed _IMPAGE
+# but they also have _AGEG5YR too 
+
+# 2002 has _AGEG5YR
+
+# 2000 has its own thing, check it out
+
+# 1999 starts going by decades of age, different spacing, called AGE
+
+# etc
+
+
+
+```
+
+
+## Load data
+
+```{r}
+
+# Load already BRFSS csv modified and extracted 2011-2023
+
+data_brfss <- read_csv("big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv")
+
+```
+
+# Basic Analysis
+
+```{r}
+
+
+data_brfss %>% 
+  filter(age > 18, age < 90) %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "BRFSS 2004 - 2023 Dataset",
+       x = "Average SRH", 
+       y = "Year") +
+  geom_point() 
+
+
+# health vs age per year
+data_brfss %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "BRFSS 2004 - 2023 Dataset",
+       x = "Average SRH", 
+       y = "Age of Respondent")
+
+
+# Aggregate slopes
+
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(health ~ age, data = cur_data()))["age"])
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
+lm_health_v_age_0 <- data_brfss %>%
+  group_by(year) %>%
+  do(broom::tidy(lm(health ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
+
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_health_v_age_0)
+knitr::kable(lm_health_v_age_0,
+             caption = "BRFSS 2004 - 2023 Dataset")
+
+# Plot coefficients
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "BRFSS 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Plot coefficients with CI
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "BRFSS 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_health_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "BRFSS 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+data_brfss %>% 
+  filter(cohort > 1800, cohort < 2020) %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort", 
+       subtitle = "BRFSS 2004 - 2023 Dataset") +
+  geom_line()
+
+
+
+```
+
