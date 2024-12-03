@@ -5,33 +5,6 @@ Christine Lucille Kuryla
 
 Note: 2003 was weird with age so skipping for now
 
-``` r
-# Load packages
-library(haven)   # For reading SAS Transport files
-library(dplyr)   # For data manipulation
-library(survey)  # For survey data analysis
-```
-
-    ## Loading required package: grid
-
-    ## Loading required package: Matrix
-
-    ## 
-    ## Attaching package: 'Matrix'
-
-    ## The following objects are masked from 'package:tidyr':
-    ## 
-    ##     expand, pack, unpack
-
-    ## Loading required package: survival
-
-    ## 
-    ## Attaching package: 'survey'
-
-    ## The following object is masked from 'package:graphics':
-    ## 
-    ##     dotchart
-
 # Load and wrangle data
 
 ### Load just minimum variables 2011 - 2023
@@ -260,9 +233,9 @@ table(data_brfss_2004_2023$cohort)
 # same for 2004, but they also have imputed _IMPAGE
 # but they also have _AGEG5YR too 
 
-# 2002 has _AGEG5YR
+# 2000, 2002 has _AGEG5YR
 
-# 2000 has its own thing, check it out
+# 2001 has its own thing, check it out
 
 # 1999 starts going by decades of age, different spacing, called AGE
 
@@ -272,7 +245,7 @@ table(data_brfss_2004_2023$cohort)
 ## Load data
 
 ``` r
-# Load already BRFSS csv modified and extracted 2011-2023
+# Load BRFSS csv already modified and extracted 2011-2023
 
 data_brfss <- read_csv("big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv")
 ```
@@ -297,15 +270,16 @@ data_brfss %>%
   geom_line() +
   labs(title = "Average SRH Per Year for Each Age Group",
        subtitle = "BRFSS 2004 - 2023 Dataset",
-       x = "Average SRH", 
-       y = "Year") +
+       y = "Average SRH", 
+       x = "Year",
+       color = "Age Group") +
   geom_point() 
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
     ## argument.
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 ``` r
 # health vs age per year
@@ -317,14 +291,14 @@ data_brfss %>%
   facet_wrap(~ year) +
   labs(title = "Self-Rated Health By Age (Per Year)",
        subtitle = "BRFSS 2004 - 2023 Dataset",
-       x = "Average SRH", 
-       y = "Age of Respondent")
+       y = "Average SRH", 
+       x = "Age of Respondent")
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
     ## argument.
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
 
 ``` r
 # Aggregate slopes
@@ -386,7 +360,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   theme_minimal()
 ```
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-3.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
 
 ``` r
 # Plot coefficients with CI
@@ -403,7 +377,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   theme_minimal()
 ```
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-4.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-4.png)<!-- -->
 
 ``` r
 # Perform linear regression of 'coef' (age coefficient) vs 'year'
@@ -436,7 +410,7 @@ summary(lm_coef_vs_year)
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+#  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
     subtitle = "BRFSS 2004 - 2023 Dataset",
@@ -448,7 +422,7 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-5.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-5.png)<!-- -->
 
 ``` r
 data_brfss %>% 
@@ -465,4 +439,4 @@ data_brfss %>%
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
     ## argument.
 
-![](srh_brfss_files/figure-gfm/unnamed-chunk-5-6.png)<!-- -->
+![](srh_brfss_files/figure-gfm/unnamed-chunk-4-6.png)<!-- -->

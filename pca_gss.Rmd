@@ -134,3 +134,23 @@ biplot(pca_result, choices = 5:6)
 
 ```
 
+```{r}
+
+library(tree)
+
+loadings_transpose <- t(loadings_df %>% select(-Variables))
+
+tree_pca <- tree(health ~ ., data = as.data.frame(loadings_transpose))
+plot(tree_pca)
+text(tree_pca)
+
+tree_gss <- tree(health ~ ., data = data_gss)
+plot(tree_gss)
+text(tree_gss)
+
+lm_gss_all <- lm(health ~ age + sex + happy + life + educ + polviews + class + satfin, data = data_gss)
+summary(lm_gss_all)
+
+
+```
+

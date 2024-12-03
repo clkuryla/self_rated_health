@@ -214,15 +214,16 @@ hist(data_ivs_usa$happy)
 ``` r
 data_ivs_usa %>% 
   filter(age > 18, age < 90) %>% 
-  mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
   group_by(age, year) %>% 
   summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = age)) +
   geom_line() +
   labs(title = "Average SRH Per Year for Each Age Group",
        subtitle = "IVS Dataset",
-       x = "Average SRH", 
-       y = "Year") +
+       y = "Average SRH", 
+       x = "Year",
+       color = "Age Group") +
   geom_point() 
 ```
 
@@ -241,8 +242,8 @@ data_ivs_usa %>%
   facet_wrap(~ year) +
   labs(title = "Self-Rated Health By Age (Per Year)",
        subtitle = "IVS Dataset",
-       x = "Average SRH", 
-       y = "Age of Respondent")
+       y = "Average SRH", 
+       x = "Age of Respondent")
 ```
 
     ## `summarise()` has grouped output by 'age'. You can override using the `.groups`
@@ -579,7 +580,7 @@ summary(lm_coef_vs_year)
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+#  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
     x = "Year",

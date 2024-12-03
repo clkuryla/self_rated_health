@@ -1,0 +1,239 @@
+---
+title: "SRH - GSS with Survey Weights"
+author: "Christine Lucille Kuryla"
+date: "2024-11-29"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(srvyr)
+
+
+```
+
+
+Here's a summary of the interesting findings from my analysis of self-rated health in the GSS dataset so far. 
+
+See https://github.com/clkuryla/self_rated_health/blob/main/gss_eda.md for more EDA and details.
+
+* `health`
+The first variable of interest is “health”, which will be the main subject of our analysis: https://gssdataexplorer.norc.org/variables/437/vshow
+
+Question on survey: “Would you say your own health, in general, is excellent, good, fair, or poor?” 
+
+Coded in this analysis (it was recoded from the raw data) as:
+4 - Excellent
+3 - Good
+2 - Fair
+1 - Poor
+
+Other variables used are:
+
+* `age`
+  - Age of respondent at time of survey
+  
+* `year`
+  - Year of survey
+  
+* `cohort`
+  - Birth year of respondent
+  
+Additional covariates and analyses to come. 
+
+
+# Fetch, load, clean, and recode data
+## Fetch GSS data 
+
+```{r fetch_data, eval = FALSE}
+
+# Feel free to modify to play with more covariates and variables.
+
+#install.packages('gssr', repos =  c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+# install.packages('gssrdoc', repos = c('https://kjhealy.r-universe.dev', 'https://cloud.r-project.org'))
+
+library(gssr)
+library(gssrdoc)
+
+data("gss_all") # this file is big! 
+
+# It's a bit excessive to download the entire GSS dataset every time we knit, so lets just save some variables of interest and write it out for future use.
+
+# Add 'wtss' and 'wtssall' to variable selection
+data_gss <- as.data.frame(gss_all) %>% 
+  select(
+    year,      # Year of survey
+    cohort,    # Birth year
+    age,       # Age at time of survey
+    health,    # Self-rated health
+    sex,       # Sex
+    happy,     # Self-rated happiness
+    life,      # Is life exciting or dull (subjective wellbeing)
+    educ,      # Years of education
+    polviews,  # Political views
+    class,     # Subjective class identification
+    satfin,    # Satisfaction with financial situation
+    region,    # region (south: 1 if 4<x<8, else 0)
+    attend,    # attends religious services
+    race,      # race
+  #  vpsu,         # not available in gssr
+  #  vstrat,       # not available in gssr
+    wtssps,    # Weight for single-year analysis
+    wtssall    # Weight for multi-year analysis
+  )
+
+write_csv(data_gss, "data/extracted_gss_variables.csv")
+
+# Note: GSSR does not provide vpsu and vstrat. Other data sources may provide it, and we will look into that eventually. 
+
+# If found, update survey object to:
+# gss_svy <- data_gss %>%
+#   as_survey_design(
+#     ids = vpsu,           # PSU identifiers
+#     strata = vstrat,      # Stratification variable
+#     weights = wtssall,    # Weight variable for multi-year analysis
+#     nest = TRUE           # Important when PSUs are nested within strata
+#   )
+
+# instead of:
+# gss_svy <- data_gss %>%
+#   as_survey_design(
+#     ids = 1,            # No clustering variable available
+#     weights = wtssall
+#   )
+```
+
+## Load and clean data
+
+Here we'll load our data, clean some unwanted values, and recode the unintuitive variables.
+
+```{r load_and_clean_data}
+data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
+  filter(cohort != 9999) %>% 
+  na.omit() %>% 
+  mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
+  mutate(happy = 4 - happy) %>% # same
+  mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
+  mutate(satfin = 4 - satfin) # same again!
+```
+
+```{r}
+# Create a survey design object using wtssall for multi-year analysis
+gss_svy <- data_gss %>%
+  as_survey_design(
+    ids = 1,           # PSU identifiers (use 1 if not available)
+    weights = wtssall  # Use 'wtss' for single-year analysis
+  )
+
+
+# Compute weighted mean of self-rated health
+gss_svy %>%
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  )
+
+# Create age groups
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 5))
+
+# Compute weighted mean health by age group and year
+weighted_health_by_age <- gss_svy %>%
+  group_by(age_group, year) %>%
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  )
+
+ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
+#  geom_smooth() +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+
+library(broom)
+
+
+# Perform weighted regression for each year
+weighted_lm_by_year <- gss_svy %>%
+  group_by(year) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+# with additinal covariates
+weighted_lm_by_year <- gss_svy %>%
+  group_by(year) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age + sex + educ + race + happy + class, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+summary(weighted_lm_by_year)
+
+```
+
+```{r}
+
+# Plot the coefficients with confidence intervals
+ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Survey Weights",
+    subtitle = "GSS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Regress the age coefficients on year
+coef_model <- lm(estimate ~ year, data = weighted_lm_by_year)
+summary(coef_model)
+
+# Plot the regression
+ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years with Survey Weights",
+    subtitle = "GSS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+summary(weighted_lm_by_year)
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(estimate ~ year, data = weighted_lm_by_year)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+```
+
+
+```{r}
+
+# Example using the APC package
+# library(apc)
+# apc_model <- apc.fit(data_gss$health, data_gss$year, data_gss$cohort)
+# summary(apc_model)
+# 
+
+```
+
