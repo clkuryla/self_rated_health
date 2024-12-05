@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(srvyr)
+library(survey)
 
 
 ```
@@ -81,7 +82,8 @@ data_gss <- as.data.frame(gss_all) %>%
   #  vpsu,         # not available in gssr
   #  vstrat,       # not available in gssr
     wtssps,    # Weight for single-year analysis
-    wtssall    # Weight for multi-year analysis
+    wtssall,    # Weight for multi-year analysis ** stops at 2018
+    wtsscomp
   )
 
 write_csv(data_gss, "data/extracted_gss_variables.csv")
@@ -112,6 +114,8 @@ Here we'll load our data, clean some unwanted values, and recode the unintuitive
 ```{r load_and_clean_data}
 data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
   filter(cohort != 9999) %>% 
+  select(-c(attend, region, wtssps)) %>% 
+  select(-wtssall) %>% 
   na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
@@ -124,10 +128,19 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
 gss_svy <- data_gss %>%
   as_survey_design(
     ids = 1,           # PSU identifiers (use 1 if not available)
-    weights = wtssall  # Use 'wtss' for single-year analysis
+    weights = wtsscomp  # wtssall pre 2018, wtsscomp combined //Use 'wtss' for single-year analysis
   )
+```
 
+# Self rated health as predicted by age over the years
 
+Let's explore the effect of different cohorts on SRH at certain ages.
+
+## SRH vs year of survey for different ages
+
+In the following figure, I cut the age of participants into 6 groups and plotted the mean of the group's self-rated health for each year (that's what each dot is). As you can qualitatively see, the spread seems to narrow. 
+
+```{r}
 # Compute weighted mean of self-rated health
 gss_svy %>%
   summarise(
@@ -136,7 +149,7 @@ gss_svy %>%
 
 # Create age groups
 gss_svy <- gss_svy %>%
-  mutate(age_group = cut(age, breaks = 5))
+  mutate(age_group = cut(age, breaks = 6))
 
 # Compute weighted mean health by age group and year
 weighted_health_by_age <- gss_svy %>%
@@ -146,7 +159,7 @@ weighted_health_by_age <- gss_svy %>%
   )
 
 ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
-#  geom_smooth() +
+#  geom_smooth(alpha = 0.2) +
   geom_line() +
   geom_point() +
   labs(
@@ -159,8 +172,55 @@ ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)
   theme_minimal()
 
 library(broom)
+```
 
 
+## Relationship of self-rated health to age, separated out by years
+
+Well, it seems like the spread of self-rated health among ages decreases as time goes on (later years). Let's look at that by faceting mean self-rated health vs age by year. 
+
+Note that intuitively, we'd expect it to be a negative slope because older people intuitively should have worse health. 
+
+Notice *the slopes seem to flatten over time.*
+
+```{r health_v_age_per_year}
+# health vs age per year
+gss_svy %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = survey_mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "GSS Dataset",
+       x = "Age of Respondent", 
+       y = "Average SRH",
+       )
+```
+
+
+
+```{r}
+# health vs year per cohort
+gss_svy_gen %>% 
+  group_by(age, generation_three_sections) %>% 
+  summarize(mean_health = survey_mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ generation_three_sections) +
+  labs(title = "Self-Rated Health Over Time (Per Cohort)",
+       subtitle = "GSS Dataset",
+       x = "Age", 
+       y = "Average SRH",
+       )
+```
+
+
+## Regress self-rated health on age, for each year
+
+Let's do a regression on each self-rated-health vs age, subsetted for each year (the plots on the faceted figure), look at the significance, and plot the coefficients for age with 95% CIs:
+
+```{r}
 # Perform weighted regression for each year
 weighted_lm_by_year <- gss_svy %>%
   group_by(year) %>%
@@ -171,29 +231,37 @@ weighted_lm_by_year <- gss_svy %>%
   filter(term == "age") %>%
   select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
 
-# with additinal covariates
-weighted_lm_by_year <- gss_svy %>%
-  group_by(year) %>%
-  group_map_dfr(~ {
-    model <- survey::svyglm(health ~ age + sex + educ + race + happy + class, design = .x)
-    tidy(model, conf.int = TRUE)
-  }) %>%
-  filter(term == "age") %>%
-  select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+knitr::kable(weighted_lm_by_year)
 
 summary(weighted_lm_by_year)
 
+# # with additinal covariates
+# weighted_lm_by_year <- gss_svy %>%
+#   group_by(year) %>%
+#   group_map_dfr(~ {
+#     model <- survey::svyglm(health ~ age + sex + educ + race + happy + class, design = .x)
+#     tidy(model, conf.int = TRUE)
+#   }) %>%
+#   filter(term == "age") %>%
+#   select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+# 
+# summary(weighted_lm_by_year)
+
 ```
+
+
 
 ```{r}
 
-# Plot the coefficients with confidence intervals
+# Plot the coefficients with error bars
 ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
-  geom_line() +
+#  geom_line() +
   geom_point() +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+ # geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
   labs(
-    title = "Change in 'Age' Coefficient Over Years with Survey Weights",
+    title = "Change in 'Age' Coefficient Over Years",
     subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
@@ -207,9 +275,11 @@ summary(coef_model)
 # Plot the regression
 ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
   geom_point() +
-  geom_smooth(method = "lm", se = TRUE) +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +
   labs(
-    title = "Regression of 'Age' Coefficient Over Years with Survey Weights",
+    title = "Regression of 'Age' Coefficient Over Years",
     subtitle = "GSS Dataset",
     x = "Year",
     y = "Coefficient of Age"
@@ -229,11 +299,837 @@ summary(lm_coef_vs_year)
 
 ```{r}
 
-# Example using the APC package
-# library(apc)
-# apc_model <- apc.fit(data_gss$health, data_gss$year, data_gss$cohort)
-# summary(apc_model)
-# 
+srh_age_groups_point_line_figure <- function(age_cuts) {
+# Create age groups
+gss_svy %>%
+  mutate(age_group = cut(age, breaks = age_cuts)) %>% # number of age groups
+  group_by(age_group, year) %>% # Compute weighted mean health by age group and year
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  ) %>% 
+ggplot(aes(x = year, y = mean_health, color = age_group)) +
+#  geom_smooth(alpha = 0.2) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+}
+
+srh_age_groups_loess_figure <- function(age_cuts) {
+# Create age groups
+gss_svy %>%
+  mutate(age_group = cut(age, breaks = age_cuts)) %>% # number of age groups
+  group_by(age_group, year) %>% # Compute weighted mean health by age group and year
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  ) %>% 
+ggplot(aes(x = year, y = mean_health, color = age_group)) +
+  geom_smooth(alpha = 0.4) +
+#  geom_line() +
+#  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+}
+
+srh_age_groups_point_line_figure(3)
+srh_age_groups_point_line_figure(4)
+srh_age_groups_point_line_figure(6)
+srh_age_groups_point_line_figure(10)
+
+srh_age_groups_loess_figure(3)
+srh_age_groups_loess_figure(4)
+srh_age_groups_loess_figure(6)
+srh_age_groups_loess_figure(10)
+
+```
+
+# Cohort effect on SRH
+
+## Generation splitting
+
+```{r}
+
+data_gss_generations <- data_gss %>%
+  filter(cohort > 1900) %>%
+  mutate(
+    generation = factor(
+      case_when(
+        cohort >= 1901 & cohort <= 1927 ~ "Greatest (1901-1927)",
+        cohort >= 1928 & cohort <= 1945 ~ "Silent (1928-1945)",
+        cohort >= 1946 & cohort <= 1964 ~ "Boomers (1946-1964)",
+        cohort >= 1965 & cohort <= 1980 ~ "Gen X (1965-1980)",
+        cohort >= 1981 & cohort <= 1996 ~ "Millennials (1981-1996)",
+        cohort >= 1997 & cohort <= 2012 ~ "Gen Z (1997-2012)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest (1901-1927)",
+        "Silent (1928-1945)",
+        "Boomers (1946-1964)",
+        "Gen X (1965-1980)",
+        "Millennials (1981-1996)",
+        "Gen Z (1997-2012)"#,
+     #   "Other"
+      )
+    ),
+    generation_two_sections = factor(
+      case_when(
+        generation == "Greatest (1901-1927)" & cohort <= 1914 ~ "Greatest Early (1901-1914)",
+        generation == "Greatest (1901-1927)" & cohort > 1914 ~ "Greatest Late (1915-1927)",
+        generation == "Silent (1928-1945)" & cohort <= 1936 ~ "Silent Early (1928-1936)",
+        generation == "Silent (1928-1945)" & cohort > 1936 ~ "Silent Late (1937-1945)",
+        generation == "Boomers (1946-1964)" & cohort <= 1955 ~ "Boomers Early (1946-1955)",
+        generation == "Boomers (1946-1964)" & cohort > 1955 ~ "Boomers Late (1956-1964)",
+        generation == "Gen X (1965-1980)" & cohort <= 1972 ~ "Gen X Early (1965-1972)",
+        generation == "Gen X (1965-1980)" & cohort > 1972 ~ "Gen X Late (1973-1980)",
+        generation == "Millennials (1981-1996)" & cohort <= 1988 ~ "Millennials Early (1981-1988)",
+        generation == "Millennials (1981-1996)" & cohort > 1988 ~ "Millennials Late (1989-1996)",
+        generation == "Gen Z (1997-2012)" & cohort <= 2004 ~ "Gen Z Early (1997-2004)",
+        generation == "Gen Z (1997-2012)" & cohort > 2004 ~ "Gen Z Late (2005-2012)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest Early (1901-1914)", "Greatest Late (1915-1927)",
+        "Silent Early (1928-1936)", "Silent Late (1937-1945)",
+        "Boomers Early (1946-1955)", "Boomers Late (1956-1964)",
+        "Gen X Early (1965-1972)", "Gen X Late (1973-1980)",
+        "Millennials Early (1981-1988)", "Millennials Late (1989-1996)",
+        "Gen Z Early (1997-2004)", "Gen Z Late (2005-2012)"#,
+     #   "Other"
+      )
+    ),
+    generation_three_sections = factor(
+      case_when(
+        generation == "Greatest (1901-1927)" & cohort <= 1910 ~ "Greatest Early (1901-1910)",
+        generation == "Greatest (1901-1927)" & cohort > 1910 & cohort <= 1918 ~ "Greatest Mid (1911-1918)",
+        generation == "Greatest (1901-1927)" & cohort > 1918 ~ "Greatest Late (1919-1927)",
+        generation == "Silent (1928-1945)" & cohort <= 1934 ~ "Silent Early (1928-1934)",
+        generation == "Silent (1928-1945)" & cohort > 1934 & cohort <= 1940 ~ "Silent Mid (1935-1940)",
+        generation == "Silent (1928-1945)" & cohort > 1940 ~ "Silent Late (1941-1945)",
+        generation == "Boomers (1946-1964)" & cohort <= 1951 ~ "Boomers Early (1946-1951)",
+        generation == "Boomers (1946-1964)" & cohort > 1951 & cohort <= 1958 ~ "Boomers Mid (1952-1958)",
+        generation == "Boomers (1946-1964)" & cohort > 1958 ~ "Boomers Late (1959-1964)",
+        generation == "Gen X (1965-1980)" & cohort <= 1970 ~ "Gen X Early (1965-1970)",
+        generation == "Gen X (1965-1980)" & cohort > 1970 & cohort <= 1976 ~ "Gen X Mid (1971-1976)",
+        generation == "Gen X (1965-1980)" & cohort > 1976 ~ "Gen X Late (1977-1980)",
+        generation == "Millennials (1981-1996)" & cohort <= 1986 ~ "Millennials Early (1981-1986)",
+        generation == "Millennials (1981-1996)" & cohort > 1986 & cohort <= 1992 ~ "Millennials Mid (1987-1992)",
+        generation == "Millennials (1981-1996)" & cohort > 1992 ~ "Millennials Late / Gen Z (1993-2004)",
+    #    generation == "Gen Z (1997-2012)" & cohort <= 2002 ~ "Gen Z Early (1997-2002)",
+    #    generation == "Gen Z (1997-2012)" & cohort > 2002 & cohort <= 2008 ~ "Gen Z Mid (2003-2008)",
+    #    generation == "Gen Z (1997-2012)" & cohort > 2008 ~ "Gen Z Late (2009-2012)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest Early (1901-1910)", "Greatest Mid (1911-1918)", "Greatest Late (1919-1927)",
+        "Silent Early (1928-1934)", "Silent Mid (1935-1940)", "Silent Late (1941-1945)",
+        "Boomers Early (1946-1951)", "Boomers Mid (1952-1958)", "Boomers Late (1959-1964)",
+        "Gen X Early (1965-1970)", "Gen X Mid (1971-1976)", "Gen X Late (1977-1980)",
+        "Millennials Early (1981-1986)", "Millennials Mid (1987-1992)", 
+        "Millennials Late / Gen Z (1993-2004)"
+        #"Millennials Late (1993-1996)",
+      #  "Gen Z Early (1997-2002)", "Gen Z Mid (2003-2008)", "Gen Z Late (2009-2012)" #,
+      #  "Other"
+      )
+    )
+  )
+
+
+
+table(data_gss_generations$generation)
+table(data_gss_generations$generation_two_sections)
+table(data_gss_generations$generation_three_sections)
+
+gss_svy_gen <- data_gss_generations %>%
+  as_survey_design(ids = 1, weights = wtsscomp)
+
+```
+
+
+## Regression with age and cohorts
+
+```{r}
+
+# Create cohort groups (e.g., decades)
+data_gss <- data_gss %>%
+  mutate(cohort_group = cut(cohort, breaks = seq(1900, 2010, by = 10), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 10), seq(1909, 2009, by = 10), sep = "-")))
+
+# Cohort groups by 15 years
+data_gss_15 <- data_gss %>%
+  mutate(cohort_15_yr = cut(cohort, breaks = seq(1900, 2010, by = 15), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 15), 15 + seq(1900, 2000, by = 15), sep = "-")))
+
+# Create cohort groups (e.g., decades)
+data_gss_10 <- data_gss %>%
+  mutate(cohort_10_yr = cut(cohort, breaks = seq(1900, 2010, by = 10), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 10), seq(1909, 2009, by = 10), sep = "-")))
+
+# # Cohort groups by 5 years
+data_gss_5 <- data_gss %>%
+  mutate(cohort_05_yr = cut(cohort, breaks = seq(1900, 2005, by = 5), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 5), 5 + seq(1900, 2000, by = 5), sep = "-")))
+
+# Update survey design object
+gss_svy_5 <- data_gss_5 %>%
+  as_survey_design(ids = 1, weights = wtsscomp)
+
+gss_svy_10 <- data_gss_10 %>%
+  as_survey_design(ids = 1, weights = wtsscomp)
+
+gss_svy_15 <- data_gss_15 %>%
+  as_survey_design(ids = 1, weights = wtsscomp)
+
+
+# 15 year cohorts
+# Regression including age and cohort_group
+weighted_lm_cohort <- gss_svy_15 %>%
+  svyglm(health ~ age + cohort_15_yr, design = .)
+# Summarize the model
+summary(weighted_lm_cohort)
+
+# 5 year cohorts
+# Regression including age and cohort_group
+weighted_lm_cohort <- gss_svy_10 %>%
+  svyglm(health ~ age + cohort_10_yr, design = .)
+# Summarize the model
+summary(weighted_lm_cohort)
+
+# 10 year cohorts
+# Regression including age and cohort_group
+weighted_lm_cohort <- gss_svy_5 %>%
+  svyglm(health ~ age + cohort_05_yr, design = .)
+# Summarize the model
+summary(weighted_lm_cohort)
+
+
+
+# Function to plot this
+  
+cohort_age_interation_figure <- function(cohort_length_string) {
+  
+# Prepare data for the plot
+coef_data <- broom::tidy(weighted_lm_cohort) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(significant = ifelse(p.value < 0.05, "Significant", "Not Significant"),
+         term = ifelse(grepl("cohort_group", term), gsub("cohort_group", "", term), term))
+
+# Plot
+ggplot(coef_data, aes(x = term, y = estimate, fill = significant)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  labs(
+    title = "Cohort Effects on SRH",
+    subtitle = cohort_length_string,
+    x = "Term (Age or Cohort Birthyear Group)",
+    y = "Coefficient Estimate",
+    fill = "Significance"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+}
+
+# Plot for different cohort sizes
+
+weighted_lm_cohort <- gss_svy_5 %>%
+  mutate(cohort_group = cohort_05_yr) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+cohort_age_interation_figure("5-Year Cohorts")
+
+weighted_lm_cohort <- gss_svy_15 %>%
+  mutate(cohort_group = cohort_15_yr) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+cohort_age_interation_figure("15-Year Cohorts")
+
+weighted_lm_cohort <- gss_svy_10 %>%
+  mutate(cohort_group = cohort_10_yr) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+cohort_age_interation_figure("10-Year Cohorts")
+
+
+
+
+### Generations
+
+library(ggplot2)
+library(dplyr)
+library(broom)
+
+generation_age_interaction_figure <- function(cohort_length_string) {
+  
+  # Prepare data for the plot
+  coef_data <- broom::tidy(weighted_lm_generation) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      # Clean the term to remove "cohort_group" prefix if present
+      term_cleaned = ifelse(grepl("cohort_group", term), gsub("cohort_group", "", term), term),
+      # Extract the first year (numeric) from cohort terms or assign NA for "age"
+      first_year = ifelse(term_cleaned == "age", NA, as.numeric(sub("-.*", "", term_cleaned))),
+      # Add a numeric ordering key: assign 0 to "age" and the extracted year to cohort groups
+      term_numeric = ifelse(term_cleaned == "age", 0, first_year),
+      # Reorder terms based on the numeric ordering key
+      term_ordered = reorder(term_cleaned, term_numeric),
+      significant = ifelse(p.value < 0.05, "Significant", "Not Significant")
+    )
+
+  # Plot
+  ggplot(coef_data, aes(x = term_ordered, y = estimate, fill = significant)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+    labs(
+      title = "Cohort Effects on SRH",
+      subtitle = cohort_length_string,
+      x = "Term (Age or Cohort Birthyear Group)",
+      y = "Coefficient Estimate",
+      fill = "Significance"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Call the function with a sample subtitle
+# generation_age_interaction_figure("Cohort Length: 10 Years")
+
+
+library(ggplot2)
+library(dplyr)
+library(broom)
+
+generation_age_interaction_figure <- function(cohort_length_string) {
+  
+  # Prepare data for the plot
+  coef_data <- broom::tidy(weighted_lm_generation) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      # Clean the term to remove "cohort_group" prefix if present
+      term_cleaned = ifelse(grepl("cohort_group", term), gsub("cohort_group", "", term), term),
+      # Extract the first year from cohort terms using regex (assign NA for "age")
+      first_year = ifelse(term_cleaned == "age", NA, as.numeric(stringr::str_extract(term_cleaned, "^\\d{4}"))),
+      # Add a numeric ordering key: assign 0 to "age" and use the extracted first year for cohorts
+      term_numeric = ifelse(term_cleaned == "age", 0, first_year),
+      # Reorder terms based on the numeric ordering key
+      term_cleaned = factor(term_cleaned, levels = term_cleaned[order(term_numeric)]),
+      significant = ifelse(p.value < 0.05, "Significant", "Not Significant")
+    )
+
+  # Plot
+  ggplot(coef_data, aes(x = term_cleaned, y = estimate, fill = significant)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+    labs(
+      title = "Cohort Effects on SRH",
+      subtitle = cohort_length_string,
+      x = "Term (Age or Cohort Birthyear Group)",
+      y = "Coefficient Estimate",
+      fill = "Significance"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Call the function with a sample subtitle
+# cohort_age_interaction_figure("Cohort Length: 10 Years")
+
+
+
+weighted_lm_generation <- gss_svy_gen %>% 
+  mutate(cohort_group = generation_two_sections) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+generation_age_interaction_figure("Generations")
+
+weighted_lm_generation <- gss_svy_gen %>% 
+  mutate(cohort_group = generation) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+generation_age_interaction_figure("Generations")
+
+weighted_lm_generation <- gss_svy_gen %>% 
+  mutate(cohort_group = generation_three_sections) %>% 
+  svyglm(health ~ age + cohort_group, design = .)
+generation_age_interaction_figure("Generations")
+
+```
+
+Positive coefficients indicate better SRH compared to the 1900-1909 cohort (reference group), adjusting for age.
+
+- SRH improved significantly for cohorts born between 1920-1979, peaking in 1940-1949.
+- Recent cohorts (1980-2009) show no significant change.
+
+## Interaction terms between age and cohort
+
+Does the impact of age on SRH differ across cohorts?
+
+```{r}
+
+
+
+
+# Regression with interaction between age and cohort_group
+weighted_lm_interaction <- gss_svy_10 %>%
+  svyglm(health ~ age * cohort_group, design = .)
+
+# Summarize the model
+summary(weighted_lm_interaction)
+
+# Visualize the interaction
+library(ggplot2)
+# Create a dataset for predictions
+new_data <- expand.grid(
+  age = seq(min(data_gss$age), max(data_gss$age), by = 1),
+  cohort_group = levels(data_gss$cohort_group)
+)
+
+# Predict SRH
+
+predictions <- as.data.frame(predict(weighted_lm_interaction, newdata = new_data, type = "response", se = TRUE))
+new_data$predicted_health <- predictions$response
+new_data$se <- predictions$SE
+
+
+
+# Plot
+ggplot(new_data, aes(x = age, y = predicted_health, color = cohort_group)) +
+  geom_line() +
+  labs(
+    title = "Predicted SRH by Age and Cohort",
+    x = "Age",
+    y = "Predicted Self-Rated Health",
+    color = "Cohort Group"
+  ) +
+  theme_minimal()
+
+```
+
+```{r, eval = FALSE}
+
+library(dplyr)
+library(broom)
+library(ggplot2)
+
+# Extract coefficients
+coef_data <- broom::tidy(weighted_lm_interaction) %>%
+  filter(term %in% grep("age:cohort_group", term, value = TRUE)) %>%
+  mutate(
+    cohort_group = gsub("age:cohort_group", "", term),
+    significant = ifelse(p.value < 0.05, "Significant", "Not Significant")
+  )
+
+# Generate predictions for each cohort group
+library(ggeffects)
+predictions <- ggpredict(weighted_lm_cohort, terms = c("age", "cohort_group"))
+
+# Plot predictions
+ggplot(predictions, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Interaction of Age and Cohort Group on Self-Rated Health",
+    x = "Age",
+    y = "Predicted SRH",
+    color = "Cohort Group"
+  ) +
+  theme_minimal()
+
+# Plot interaction coefficients
+ggplot(coef_data, aes(x = cohort_group, y = estimate, fill = significant)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  labs(
+    title = "Interaction Effects of Age and Cohort Group on SRH",
+    x = "Cohort Group",
+    y = "Interaction Coefficient (Age Effect)",
+    fill = "Significance"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+"Age and Cohort Interaction Effects on Self-Rated Health (SRH)"
+
+Key Findings:
+
+Higher Baseline SRH for Later Cohorts:
+
+Cohorts born between 1920-2009 report significantly higher SRH compared to the 1900-1909 cohort.
+The 2000-2009 cohort shows the highest baseline SRH but also the most variability.
+Steeper Age-Related Declines in SRH for Recent Cohorts:
+
+The effect of age on SRH becomes progressively more negative in later cohorts.
+Individuals in the 2000-2009 cohort experience the steepest decline in SRH as they age.
+Mid-Century Cohorts Show Moderate Trends:
+
+Cohorts born between 1940-1969 exhibit improved SRH at younger ages with moderate age-related declines.
+Implications for Public Health:
+
+The steeper decline in SRH with age for more recent cohorts may reflect generational challenges, such as lifestyle changes, chronic disease prevalence, or systemic health inequities.
+Strategies to support health across the lifespan may need to account for these emerging disparities.
+
+# Incorporating covariates
+
+```{r}
+
+gss_svy <- gss_svy %>% 
+  mutate(sex = as.factor(sex),
+         race = as.factor(race))
+
+# Load libraries
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+
+formulas <- list(
+  age_only = health ~ age,
+  age_race = health ~ age + race,
+  age_sex = health ~ age + sex,
+  age_hap = health ~ age + happy,
+  age_sf_edu = health ~ age + satfin + educ,
+  age_sf_hap = health ~ age + satfin + happy,
+  age_sf_hap_educ = health ~ age + happy + satfin + educ,
+  age_sf_hap_educ_race_sex = health ~ age + happy + satfin + educ + race + sex
+)
+
+# Get a vector of unique years
+years <- sort(unique(data_gss$year))
+
+# Create a data frame of all combinations
+formula_df <- expand.grid(formula_name = names(formulas), year = years, stringsAsFactors = FALSE)
+
+# Run regressions and extract results
+results <- formula_df %>%
+  mutate(
+    formula = formulas[formula_name],
+    data = map(year, ~ filter(data_gss, year == .x)),
+    model = map2(formula, data, ~ lm(.x, data = .y)),
+    tidy = map(model, tidy),
+    glance = map(model, glance)
+  )
+
+# Extract coefficients
+coefficients_df <- results %>%
+  unnest(tidy)
+
+# Extract model summary statistics
+model_stats_df <- results %>%
+  unnest(glance)
+
+# Focus on age coefficient
+age_coefficients <- coefficients_df %>%
+  filter(term == "age") %>%
+  select(formula_name, year, estimate, std.error, statistic, p.value)
+
+# Regress Age Coefficient Over Time
+#For each formula, regress the age coefficient over time to analyze the trend:
+
+age_coeff_trend <- age_coefficients %>%
+  group_by(formula_name) %>%
+  nest() %>%
+  mutate(
+    trend_model = map(data, ~ lm(estimate ~ year, data = .x)),
+    trend_tidy = map(trend_model, tidy),
+    trend_glance = map(trend_model, glance)
+  )
+
+# Extract trend summary statistics
+trend_summary <- age_coeff_trend %>%
+  unnest(trend_glance) %>%
+  select(formula_name, r.squared, adj.r.squared, p.value, statistic)
+
+# Merge age coefficients with trend summary
+final_results <- age_coefficients %>%
+  left_join(trend_summary, by = "formula_name") %>%
+  arrange(formula_name, year)
+
+# Summary table
+# Assuming 'age_coeff_trend' is from the previous analysis
+
+# Extract trend statistics for each formula
+trend_stats <- age_coeff_trend %>%
+  mutate(
+    trend_summary = map(trend_model, ~ {
+      model <- .x
+      summary <- summary(model)
+      slope <- coef(summary)["year", "Estimate"]
+      std_error <- coef(summary)["year", "Std. Error"]
+      p_value <- coef(summary)["year", "Pr(>|t|)"]
+      conf_int <- confint(model)["year", ]
+      r_squared <- summary$r.squared
+      
+      tibble(
+        slope = slope,
+        std_error = std_error,
+        ci_lower = conf_int[1],
+        ci_upper = conf_int[2],
+        p_value = p_value,
+        r_squared = r_squared
+      )
+    })
+  ) %>%
+  unnest(trend_summary) %>%
+  select(formula_name, slope, std_error, ci_lower, ci_upper, p_value, r_squared)
+
+trend_stats
+
+knitr::kable(trend_stats)
+
+ggplot(age_coefficients, aes(x = year, y = estimate, color = formula_name)) +
+  geom_line() +
+#  geom_smooth(method = "lm", alpha = 0.2) +
+  geom_point() +
+  labs(
+    title = "Age Coefficient for Various Models Over Time",
+    x = "Year",
+    y = "Age Coefficient",
+    color = "Formula"
+  ) +
+  theme_minimal()
+
+ggplot(age_coefficients, aes(x = year, y = estimate, color = formula_name)) +
+ # geom_line() +
+  geom_smooth(method = "lm", alpha = 0.2) +
+  geom_point() +
+  labs(
+    title = "Trend for Age Coefficient for Various Models Over Time",
+    x = "Year",
+    y = "Age Coefficient",
+    color = "Formula"
+  ) +
+  theme_minimal()
+
+
+```
+
+# Cohort Effects
+
+## Visualize age profiles by cohort
+
+First let's visualize potential cohort effects.
+```{r}
+
+gss_svy_15 %>% 
+  mutate(cohort = cohort_15_yr) %>% 
+#  mutate(cohort = cut(cohort, breaks = 7)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = survey_mean(health, na.rm = TRUE)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+  geom_line()
+
+gss_svy_gen %>% 
+  mutate(cohort = generation_two_sections) %>% 
+#  mutate(cohort = cut(cohort, breaks = 7)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_health = survey_mean(health, na.rm = TRUE)) %>% 
+  ggplot(aes(x = age, y = mean_health, color = cohort)) +
+  labs(title = "Age Profiles by Cohort") +
+ # geom_smooth()
+  geom_line()
+
+```
+
+
+
+## Model srh vs age for each cohort and plot the betas and predicted age values
+
+Let's try to see why the oldest cohort line sort of looks like it lines up with the youngest by modeling the trend of srh vs age (seems linear) and comparing the expected mean health rating at 20, 40, and 60 years of age for the different cohorts, as well as the coefficient.
+
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(srvyr)
+library(broom)
+
+lm_health_v_age_cohorts <- gss_svy %>%
+  filter(cohort >= 1900 & cohort <= 1996) %>% 
+  mutate(cohort_cut = cut(cohort, breaks = 25)) %>%  # Create cohort categories
+  group_by(cohort_cut) %>%
+  summarise(
+    data = list(cur_data()) # Nest data for each cohort group
+  ) %>%
+  mutate(
+    # Fit a weighted model for each cohort using the survey design
+    model = map(data, ~ svyglm(health ~ age, design = as_survey_design(.x, weights = wtsscomp))),
+    # Predict SRH at specific ages
+    predict_20 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 20))),
+    predict_25 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 25))),
+    predict_30 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 30))),
+    predict_35 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 35))),
+    predict_40 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 40))),
+    predict_45 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 45))),
+    predict_50 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 50))),
+    predict_55 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 55))),
+    predict_65 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 65))),
+    predict_70 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 70))),
+    predict_75 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 75))),
+    predict_80 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 80))),
+    # Extract the coefficient (beta) and standard error
+    beta = map_dbl(model, ~ coef(.x)["age"]),
+    se = map_dbl(model, ~ broom::tidy(.x) %>% filter(term == "age") %>% pull(std.error)),
+    # Calculate the mean cohort year
+    cohort_mean = map_dbl(cohort_cut, ~ mean(as.numeric(stringr::str_extract_all(.x, "\\d+")[[1]])))
+  )
+
+
+# View the results
+print(lm_health_v_age_cohorts)
+
+# Plot the coefficient (beta) for SRH vs Age for each cohort
+lm_health_v_age_cohorts %>%
+  ggplot(aes(x = cohort_mean, y = beta)) +
+  geom_errorbar(aes(ymin = beta - 1.96 * se, ymax = beta + 1.96 * se), width = 0.2) +
+  labs(
+    title = "Estimate for Coefficient for SRH vs Age for each Cohort",
+    x = "Birth Year",
+    y = "Coefficient"
+  ) +
+  geom_point()
+
+# Plot predicted SRH at age 20 for each cohort
+lm_health_v_age_cohorts %>%
+  ggplot(aes(x = cohort_mean, y = predict_20)) +
+  labs(
+    title = "Predicted SRH at age 20 for each Cohort",
+    x = "Birth Year",
+    y = "Predicted SRH"
+  ) +
+  geom_point()
+
+ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_30)) +
+  labs(title = "Predicted SRH at age 30 for each Cohort") +
+  geom_point()
+ 
+  ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_65)) +
+  labs(title = "Predicted SRH at age 40 for each Cohort") +
+  geom_point()
+
+# Plot many ages
+  
+# Reshape the data: gather all the prediction columns into one long format
+lm_health_long <- lm_health_v_age_cohorts %>%
+  pivot_longer(cols = starts_with("predict"), 
+               names_to = "prediction_age", 
+               values_to = "predicted_srh")
+
+# Create the plot using the long data format
+p <- ggplot(lm_health_long, aes(x = cohort_mean, y = predicted_srh)) +
+  geom_point() +
+  facet_wrap(~prediction_age, ncol = 4) +  # Facet by the different predictions (predict_20, predict_25, etc.)
+  labs(
+    title = "Predicted Self-Rated Health at Various Ages for Each Cohort",
+    x = "Cohort Mean",
+    y = "Predicted Self-Rated Health"
+  )
+
+# Display the combined plot
+print(p)
+
+
+```
+
+
+
+# Facet by cohort
+
+```{r}
+
+
+library(dplyr)
+library(purrr)
+library(survey)
+library(broom)
+
+weighted_lm_by_cohort <- gss_svy %>%
+  filter(cohort >= 1900 & cohort <= 1996) %>% 
+  mutate(cohort_cut = cut(cohort, breaks = 25)) %>% 
+  group_by(cohort_cut) %>%
+  group_map_dfr(~ {
+    # Create a survey design for the current group
+    survey_design <- .x %>%
+      as_survey_design(weights = wtsscomp)
+    
+    # Fit the weighted regression model
+    model <- svyglm(health ~ age, design = survey_design)
+    
+    # Extract model results
+    broom::tidy(model, conf.int = TRUE) %>%
+      mutate(cohort_cut = unique(.x$cohort_cut)) # Add cohort_cut for identification
+  }) %>%
+  filter(term == "age") %>%
+  select(cohort_cut, estimate, std.error, conf.low, conf.high, statistic, p.value) %>% 
+  mutate(cohort = map_dbl(cohort_cut, ~ mean(as.numeric(str_extract_all(.x, "\\d+")[[1]]))))
+
+
+
+
+knitr::kable(weighted_lm_by_cohort)
+
+summary(weighted_lm_by_cohort)
+
+# Plot the coefficients with error bars
+weighted_lm_by_cohort %>% 
+ggplot(aes(x = cohort, y = estimate)) +
+  # geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                position=position_dodge(0.05)) +
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  labs(
+    title = "Coefficient of Age for Different Cohorts",
+    subtitle = "GSS Dataset",
+    x = "Cohort",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+# Regress the age coefficients on year
+coef_model <- lm(estimate ~ cohort, data = weighted_lm_by_cohort)
+summary(coef_model)
+
+# Plot the regression
+ggplot(weighted_lm_by_cohort, aes(x = cohort, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+weighted_lm_by_cohort
+knitr::kable(weighted_lm_by_cohort)
+
+
+summary(weighted_lm_by_cohort)
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year_cohort <- lm(estimate ~ cohort, data = weighted_lm_by_cohort)
+
+weighted_lm_by_cohort
+
+# View the summary of the regression
+summary(lm_coef_vs_year_cohort)
+
 
 ```
 

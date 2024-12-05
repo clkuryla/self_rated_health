@@ -383,10 +383,13 @@ lm_health_v_age_cohorts <- data_gss %>%
     predict_55 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 55))),
     predict_60 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 60))),
     predict_65 = map2_dbl(model, data, ~ predict(.x, newdata = tibble(age = 65))),
-    beta = map2_dbl(model, data, ~ coef(.x)[2])
-  ) %>%
+    beta = map2_dbl(model, data, ~ coef(.x)[2]),
+    se = map2_dbl(model, data, ~ as.numeric(tidy(.x)[2, "std.error"]))
+  ) %>% 
 #  select(cohort_cut, predict_x, slope) %>%  # Select relevant columns %>% 
   mutate(cohort_mean = mean(as.numeric(unlist(regmatches(cohort_cut, gregexpr("[0-9]+", cohort_cut))))))
+
+#tidy(lm(health~age, data_gss))[2,"std.error"]
 
 # View the results
 print(lm_health_v_age_cohorts)
@@ -395,7 +398,10 @@ print(lm_health_v_age_cohorts)
 
 lm_health_v_age_cohorts %>% 
   ggplot(aes(x = cohort_mean, y = beta)) +
-  labs(title = "Estimate for Coefficient for SRH vs Age for each Cohort") +
+  labs(title = "Estimate for Coefficient for SRH vs Age for each Cohort",
+       x = "Birth Year",
+       y = "Coefficient") +
+#  geom_errorbar(ymin = beta - se, ymax = beta + se) +
   geom_point()
 
 lm_health_v_age_cohorts %>% 

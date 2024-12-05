@@ -273,6 +273,7 @@ data_brfss %>%
        y = "Average SRH", 
        x = "Year",
        color = "Age Group") +
+  theme_minimal() +
   geom_point() 
 ```
 
@@ -351,6 +352,8 @@ BRFSS 2004 - 2023 Dataset
 # Plot coefficients
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
     subtitle = "BRFSS 2004 - 2023 Dataset",
@@ -409,7 +412,9 @@ summary(lm_coef_vs_year)
 ``` r
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
-  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +  # Adds the regression line with standard error shading
 #  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",

@@ -174,40 +174,56 @@ data_ivs_usa <- rbind(evs_select, wvs_select) %>%
   filter(happy %in% c(1, 2, 3, 4)) %>%  # check the coding!
   filter(health %in% c(1, 2, 3, 4, 5))
 
+write_csv(data_ivs_usa, "data/ivs_usa_selected.csv")
+```
+
+``` r
+data_ivs_usa <- read_csv("data/ivs_usa_selected.csv")
+```
+
+    ## Rows: 12790 Columns: 6
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (6): age, year, cohort, sex, health, happy
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 hist(data_ivs_usa$age)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-5.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
 ``` r
 hist(data_ivs_usa$year)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-6.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
 
 ``` r
 hist(data_ivs_usa$cohort)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-7.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-3.png)<!-- -->
 
 ``` r
 hist(data_ivs_usa$sex)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-8.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
 
 ``` r
 hist(data_ivs_usa$health)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-9.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-5.png)<!-- -->
 
 ``` r
 hist(data_ivs_usa$happy)
 ```
 
-![](srh_ivs_files/figure-gfm/redo_gss_analysis-10.png)<!-- -->
+![](srh_ivs_files/figure-gfm/unnamed-chunk-1-6.png)<!-- -->
 
 # IVS (WVS + EVS) Replicate GSS Analysis for New Data
 
@@ -224,6 +240,7 @@ data_ivs_usa %>%
        y = "Average SRH", 
        x = "Year",
        color = "Age Group") +
+  theme_minimal() +
   geom_point() 
 ```
 
@@ -288,6 +305,8 @@ IVS Dataset
 # Plot coefficients
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
     subtitle = "IVS Dataset",
@@ -304,6 +323,8 @@ ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_line() +
   geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
   labs(
     title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
@@ -346,8 +367,10 @@ summary(lm_coef_vs_year)
 ``` r
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
   geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+#  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
     subtitle = "IVS Dataset",
@@ -552,6 +575,8 @@ knitr::kable(lm_health_v_age_0)
 # Plot coefficients
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
   labs(
     title = "Change in 'Age' Coefficient Over Years",
     x = "Year",
@@ -579,7 +604,9 @@ summary(lm_coef_vs_year)
 
 ggplot(lm_health_v_age_0, aes(x = year, y = coef)) +
   geom_point() +
-  geom_smooth(method = "lm", se = TRUE) +  # Adds the regression line with standard error shading
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +  # Adds the regression line with standard error shading
 #  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
   labs(
     title = "Regression of 'Age' Coefficient Over Years",
