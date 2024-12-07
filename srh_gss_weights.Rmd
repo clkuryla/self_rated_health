@@ -80,6 +80,13 @@ data_gss <- as.data.frame(gss_all) %>%
     region,    # region (south: 1 if 4<x<8, else 0)
     attend,    # attends religious services
     race,      # race
+    region,
+    wrkstat,
+    hispanic,
+    degree,
+    marital,
+    partyid,
+    attend,    # attended college
   #  vpsu,         # not available in gssr
   #  vstrat,       # not available in gssr
     wtssps,    # Weight for single-year analysis
@@ -115,9 +122,21 @@ Here we'll load our data, clean some unwanted values, and recode the unintuitive
 ```{r load_and_clean_data}
 data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
   filter(cohort != 9999) %>% 
-  select(-c(attend, region, wtssps)) %>% 
+  select(-c(wtssps)) %>% 
+  select(-c("region", 
+         #   "marital", 
+         #   "partyid", 
+            "hispanic"
+            )) %>% 
   select(-wtssall) %>% 
   na.omit() %>% 
+#  mutate(south = if_else(region %in% c(4, 5, 6, 7, 8), "South", "Not South")) %>% 
+#  mutate(south = as_factor(south)) %>% 
+#  mutate(region = as_factor(region)) %>% 
+  mutate(wrkstat = as_factor(wrkstat)) %>% 
+#  mutate(hispanic = as_factor(hispanic)) %>% 
+  mutate(marital = as_factor(marital)) %>% 
+  mutate(partyid = as_factor(partyid)) %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
   mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
@@ -1224,6 +1243,8 @@ ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
 
 ```
 
+
+
 ```{r, eval = TRUE}
 
 library(tidyverse)
@@ -1402,6 +1423,8 @@ gss_svy %>%
 
 # Stratify
 
+
+
 ```{r, eval = FALSE}
 
 library(dplyr)
@@ -1483,6 +1506,8 @@ ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
   theme_minimal()
 
 ```
+
+
 
 ```{r, eval = TRUE}
 
@@ -1582,7 +1607,331 @@ ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)
   theme_minimal()
 
 
+
+# Compute weighted mean health by age group, year, satfin, and sex
+weighted_health_by_age <- gss_svy %>%
+  group_by(happy, sex, age_group, year) %>%
+  summarise(
+    mean_health = srvyr::survey_mean(health, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+  # Add annotations for each line within each facet
+  # geom_text(
+  #   data = coef_info,
+  #   inherit.aes = FALSE,
+  #   aes(
+  #     x = x_text,
+  #     y = y_text,
+  #     label = sprintf("Slope=%.3e, p=%.3e, R²=%.3f", slope, p.value, r.squared),
+  #     color = age_group
+  #   ),
+  #   hjust = 0,  # left-align at x_text
+  #   vjust = 1,  # top-align at y_text
+  #   size = 3,
+  #   show.legend = FALSE # Don't want a separate legend for text color
+  # ) +
+
+
 ```
+
+## Set up factor survey object with appropriate labels
+```{r}
+
+library(survey)
+library(srvyr)
+library(dplyr)
+library(forcats)
+
+# Assuming gss_svy is already a srvyr survey object, for example:
+# gss_svy <- as_survey(gss_design)  # If you started with a svydesign called gss_design
+
+gss_svy_labeled <- gss_svy %>%
+  mutate(
+    # Reverse-coded variables:
+    # health: 1=Excellent, 2=Good, 3=Fair, 4=Poor
+    # Reversed: Poor (was 4), Fair (was 3), Good (was 2), Excellent (was 1)
+    health = recode_factor(as.factor(health),
+      `1` = "Poor",
+      `2` = "Fair",
+      `3` = "Good",
+      `4` = "Excellent"
+    ),
+
+    # happy: 1=Very happy, 2=Pretty happy, 3=Not too happy
+    # Reversed: Not too happy (was 3), Pretty happy (was 2), Very happy (was 1)
+    happy = recode_factor(as.factor(happy),
+      `1` = "Not too happy",
+      `2` = "Pretty happy",
+      `3` = "Very happy"
+    ),
+
+    # life: 1=Exciting, 2=Routine, 3=Dull
+    # Reversed: Dull (was 3), Routine (was 2), Exciting (was 1)
+    life = recode_factor(as.factor(life),
+      `1` = "Dull",
+      `2` = "Routine",
+      `3` = "Exciting"
+    ),
+
+    # satfin: 1=Satisfied, 2=More or less, 3=Not satisfied
+    # Reversed: Not satisfied (was 3), More or less (was 2), Satisfied (was 1)
+    satfin = recode_factor(as.factor(satfin),
+      `1` = "Not satisfied",
+      `2` = "More or less",
+      `3` = "Satisfied"
+    ),
+
+    # Non-reversed variables:
+    # sex: 1=Male, 2=Female
+    sex = recode_factor(as.factor(sex),
+      `1` = "Male",
+      `2` = "Female"
+    ),
+
+    # polviews: 1=Extremely liberal, 2=Liberal, 3=Slightly liberal,
+    #           4=Moderate, 5=Slightly conservative, 6=Conservative, 7=Extremely conservative
+    polviews = recode_factor(as.factor(polviews),
+      `1` = "Extremely liberal",
+      `2` = "Liberal",
+      `3` = "Slightly liberal",
+      `4` = "Moderate",
+      `5` = "Slightly conservative",
+      `6` = "Conservative",
+      `7` = "Extremely conservative"
+    ),
+
+    # class: 1=Lower class, 2=Working class, 3=Middle class, 4=Upper class
+    class = recode_factor(as.factor(class),
+      `1` = "Lower class",
+      `2` = "Working class",
+      `3` = "Middle class",
+      `4` = "Upper class"
+    ),
+
+    # attend: 0=Never, 1=Less than once a year, 2=Once a year,
+    #         3=Several times a year, 4=Once a month, 5=2-3 times a month,
+    #         6=Nearly every week, 7=Every week, 8=More than once a week
+    attend = recode_factor(as.factor(attend),
+      `0` = "Never",
+      `1` = "Less than once a year",
+      `2` = "Once a year",
+      `3` = "Several times a year",
+      `4` = "Once a month",
+      `5` = "2-3 times a month",
+      `6` = "Nearly every week",
+      `7` = "Every week",
+      `8` = "More than once a week"
+    ),
+
+    # race: 1=White, 2=Black, 3=Other
+    race = recode_factor(as.factor(race),
+      `1` = "White",
+      `2` = "Black",
+      `3` = "Other"
+    ),
+
+    # wrkstat: 1=Working fulltime, 2=Working parttime,
+    #          3=Temp not working, 4=Unemployed/laid off,
+    #          5=Retired, 6=In school, 7=Housewife, 8=Other
+    wrkstat = recode_factor(as.factor(wrkstat),
+      `1` = "Working fulltime",
+      `2` = "Working parttime",
+      `3` = "Temporary not working",
+      `4` = "Unemployed/laid off",
+      `5` = "Retired",
+      `6` = "In school",
+      `7` = "Housewife",
+      `8` = "Other"
+    ),
+
+    # degree: 0=Less than HS, 1=High school, 2=Junior college, 3=Bachelor, 4=Graduate
+    degree = recode_factor(as.factor(degree),
+      `0` = "Less than high school",
+      `1` = "High school",
+      `2` = "Junior college",
+      `3` = "Bachelor",
+      `4` = "Graduate"
+    ),
+
+    # marital: 1=Married, 2=Widowed, 3=Divorced, 4=Separated, 5=Never married
+    marital = recode_factor(as.factor(marital),
+      `1` = "Married",
+      `2` = "Widowed",
+      `3` = "Divorced",
+      `4` = "Separated",
+      `5` = "Never married"
+    ),
+
+    # partyid: 0=Strong Democrat, 1=Not strong Democrat, 2=Ind near Dem,
+    #          3=Independent, 4=Ind near Rep, 5=Not strong Rep,
+    #          6=Strong Republican, 7=Other
+    partyid = recode_factor(as.factor(partyid),
+      `0` = "Strong Democrat",
+      `1` = "Not strong Democrat",
+      `2` = "Independent, near Democrat",
+      `3` = "Independent",
+      `4` = "Independent, near Republican",
+      `5` = "Not strong Republican",
+      `6` = "Strong Republican",
+      `7` = "Other party"
+    )
+    # ),
+    # 
+    # # region: 1=Northeast, 2=North Central, 3=South, 4=West
+    # region = recode_factor(as.factor(region),
+    #   `1` = "Northeast",
+    #   `2` = "North Central",
+    #   `3` = "South",
+    #   `4` = "West"
+    )
+  
+gss_svy_labeled <- gss_svy_labeled %>%
+  mutate(age_group = cut(age, breaks = 6)) 
+
+```
+
+
+## Stratify plots
+
+```{r}
+
+
+stratify_srh_yr_plot <- function(var_name, var_char) {
+  var_sym <- rlang::sym(var_name)
+  
+  # Compute weighted mean health by the variable of interest, age group, and year
+  gss_svy_labeled %>%
+    group_by(!!var_sym, age_group, year) %>%
+    summarise(
+      mean_health = srvyr::survey_mean(as.numeric(health), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    ggplot(aes(x = year, y = mean_health, color = age_group)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(vars(!!var_sym)) +  # Use vars() for facet_wrap in ggplot2
+    labs(
+      title = paste0("Average SRH Per Year by Age Group, Stratified by ", var_char),
+      subtitle = "GSS Dataset with Survey Weights",
+      x = "Year",
+      y = "Average Self-Rated Health",
+      color = "Age Group"
+    ) +
+    theme_minimal()
+}
+
+
+stratify_srh_yr_plot("sex", "Sex")
+stratify_srh_yr_plot("race", "Race")
+stratify_srh_yr_plot("happy", "Happiness")
+stratify_srh_yr_plot("life", "Life Satisfaction")
+stratify_srh_yr_plot("polviews", "Political Views")
+stratify_srh_yr_plot("class", "Class")
+stratify_srh_yr_plot("satfin", "Financial Satisfaction")
+#stratify_srh_yr_plot("region", "Region")
+stratify_srh_yr_plot("attend", "Attend")
+stratify_srh_yr_plot("wrkstat", "wrkstat")
+#stratify_srh_yr_plot("hispanic", "Hispanic")
+stratify_srh_yr_plot("degree", "Degree")
+stratify_srh_yr_plot("marital", "Marital Status")
+stratify_srh_yr_plot("partyid", "Party ID")
+#stratify_srh_yr_plot("south", "South")
+
+
+
+```
+
+```{r}
+
+library(tidyverse)
+
+library(dplyr)
+library(purrr)
+library(broom)
+
+stratify_coeff_plot <- function(var_name, var_char) {
+  var_sym <- rlang::sym(var_name)
+
+  weighted_lm_by_group <- gss_svy_labeled %>%
+    group_by(year, !!var_sym) %>%
+    group_map_dfr(~ {
+      model <- survey::svyglm(as.numeric(health) ~ age, design = .x)
+      tidy(model, conf.int = TRUE)
+    }) %>%
+    filter(term == "age") %>%
+    select(year, !!var_sym, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+  coef_info <- weighted_lm_by_group %>%
+    group_by(!!var_sym) %>%
+    nest() %>%
+    mutate(
+      mod = map(data, ~ lm(estimate ~ year, data = .x)),
+      tidied = map(mod, ~ tidy(.x) %>% select(term, estimate, p.value)),
+      glanced = map(mod, ~ glance(.x) %>% select(r.squared))
+    ) %>%
+    unnest(cols = tidied) %>%
+    filter(term == "year") %>%
+    unnest(cols = glanced) %>%
+    select(!!var_sym, slope = estimate, p.value, r.squared)
+
+  text_positions <- weighted_lm_by_group %>%
+    group_by(!!var_sym) %>%
+    summarize(
+      x_text = min(year),
+      y_text = -0.005, #max(estimate),
+      .groups = "drop"
+    )
+
+  coef_info <- left_join(coef_info, text_positions, by = var_name)
+
+  ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    facet_grid(cols = vars(!!var_sym)) +  # Fixed facetting
+    geom_text(
+        data = coef_info,
+        inherit.aes = FALSE,
+        aes(
+          x = x_text,
+          y = y_text,
+          label = sprintf("Slope = %.3e\np = %.3e\nR² = %.3f", slope, p.value, r.squared)
+        ),
+        hjust = 0, vjust = 0, size = 3
+      ) +
+    labs(
+      title = "Change in 'Age' Coefficient Over Years",
+      subtitle = paste0("Stratified by ", var_char),
+      x = "Year",
+      y = "Coefficient of Age"
+    ) +
+    theme_minimal()
+}
+
+
+
+
+
+stratify_coeff_plot("sex", "Sex")
+stratify_coeff_plot("race", "Race")
+stratify_coeff_plot("happy", "Happiness")
+stratify_coeff_plot("life", "Life Satisfaction")
+stratify_coeff_plot("polviews", "Political Views")
+stratify_coeff_plot("class", "Class")
+stratify_coeff_plot("satfin", "Financial Satisfaction")
+#stratify_coeff_plot("region", "Region")
+stratify_coeff_plot("attend", "Attend")
+stratify_coeff_plot("wrkstat", "wrkstat")
+#stratify_coeff_plot("hispanic", "Hispanic")
+stratify_coeff_plot("degree", "Degree")
+stratify_coeff_plot("marital", "Marital Status")
+stratify_coeff_plot("partyid", "Party ID")
+# stratify_coeff_plot("south", "South")
+
+```
+
+
 
 ```{r}
 library(srvyr)
@@ -1592,14 +1941,11 @@ gss_svy <- as_survey_design(gss_svy)
 
 # Now you can use mutate directly
 gss_svy <- gss_svy %>%
-  mutate(age_group = cut(age, breaks = 6))
-
-gss_svy <- gss_svy %>%
-  mutate(age_group = cut(age, breaks = 6))
+  mutate(age_group = cut(age, breaks = 4))
 
 # Compute weighted mean health by age group, year, satfin, and sex
 weighted_health_by_age <- gss_svy %>%
-  group_by(satfin, sex, age_group, year) %>%
+  group_by(happy, sex, age_group, year) %>%
   summarise(
     mean_health = srvyr::survey_mean(health, na.rm = TRUE),
     .groups = "drop"
@@ -1609,7 +1955,7 @@ weighted_health_by_age <- gss_svy %>%
 ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
   geom_line() +
   geom_point() +
-  facet_grid(satfin ~ sex) +
+  facet_grid(happy ~ sex) +
   # Add annotations for each line within each facet
   # geom_text(
   #   data = coef_info,
@@ -1636,6 +1982,8 @@ ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)
 
 ```
 
+Check which variables have enough power for stratification
+
 ```{r}
 
 gss_svy %>% 
@@ -1643,6 +1991,75 @@ gss_svy %>%
   summarize(n = n()) %>% 
   group_by(sex, satfin ) %>% 
   summarize(avg_year = mean(n))
+
+library(dplyr)
+
+# Identify all variables except 'year'
+vars <- setdiff(
+  names(gss_svy$variables), 
+  c("year", "age", "cohort", "wtsscomp", "age_group", "health")
+)
+
+# Generate all pairs of variables
+all_pairs <- combn(vars, 2, simplify = FALSE)
+
+# For each pair, compute the desired summaries
+n_per_overlapping_strata <- bind_rows(lapply(all_pairs, function(pair) {
+  var1 <- rlang::sym(pair[1])
+  var2 <- rlang::sym(pair[2])
+  
+  gss_svy %>%
+    group_by(!!var1, !!var2, year) %>%
+    summarize(n = n(), .groups = "drop") %>%
+    group_by(!!var1, !!var2) %>%
+    summarize(
+      avg_per_year = mean(n),
+      min_per_year = min(n),
+      .groups = "drop"
+    ) %>%
+    mutate(var1 = pair[1], var2 = pair[2]) %>%
+    select(var1, var2, avg_per_year, min_per_year)
+}))
+
+# 'result' now contains a row for each variable pair and their summaries
+n_per_overlapping_strata
+
+# Average and min over all
+
+library(dplyr)
+
+vars <- setdiff(names(gss_svy$variables), c("year", "age", "cohort", "wtsscomp", "age_group"))
+all_pairs <- combn(vars, 2, simplify = FALSE)
+
+n_per_overlapping_strata_aggregated <- bind_rows(lapply(all_pairs, function(pair) {
+  var1 <- rlang::sym(pair[1])
+  var2 <- rlang::sym(pair[2])
+  
+  # Summarize at the category level
+  intermediate <- gss_svy %>%
+    group_by(!!var1, !!var2, year) %>%
+    summarize(n = n(), .groups = "drop") %>%
+    group_by(!!var1, !!var2) %>%
+    summarize(
+      avg_per_year = mean(n),
+      min_per_year = min(n),
+      .groups = "drop"
+    )
+  
+  # Now aggregate over all category combinations to get a single row per variable pair
+  intermediate %>%
+    summarize(
+      avg_per_year = mean(avg_per_year),
+      min_per_year = min(min_per_year)
+    ) %>%
+    mutate(var1 = pair[1], var2 = pair[2]) %>%
+    select(var1, var2, avg_per_year, min_per_year)
+}))
+
+n_per_overlapping_strata_aggregated %>% 
+  arrange(desc(min_per_year))
+
+
 
 ```
 
