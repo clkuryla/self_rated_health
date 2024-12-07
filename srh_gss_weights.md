@@ -359,6 +359,25 @@ ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
 ![](srh_gss_weights_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
 
 ``` r
+weighted_lm_by_year
+```
+
+    ## # A tibble: 28 × 7
+    ##     year estimate std.error conf.low conf.high statistic  p.value
+    ##    <dbl>    <dbl>     <dbl>    <dbl>     <dbl>     <dbl>    <dbl>
+    ##  1  1974  -0.0163   0.00139  -0.0190  -0.0135     -11.7  4.44e-30
+    ##  2  1976  -0.0153   0.00139  -0.0181  -0.0126     -11.0  3.87e-27
+    ##  3  1977  -0.0166   0.00144  -0.0194  -0.0138     -11.5  2.25e-29
+    ##  4  1980  -0.0148   0.00141  -0.0176  -0.0121     -10.5  6.15e-25
+    ##  5  1982  -0.0131   0.00133  -0.0157  -0.0105      -9.84 3.04e-22
+    ##  6  1984  -0.0116   0.00128  -0.0142  -0.00913     -9.10 3.14e-19
+    ##  7  1985  -0.0133   0.00136  -0.0160  -0.0107      -9.77 6.89e-22
+    ##  8  1987  -0.0147   0.00141  -0.0175  -0.0120     -10.4  9.36e-25
+    ##  9  1988  -0.0136   0.00161  -0.0168  -0.0104      -8.42 1.45e-16
+    ## 10  1989  -0.0118   0.00166  -0.0151  -0.00855     -7.11 2.26e-12
+    ## # ℹ 18 more rows
+
+``` r
 summary(weighted_lm_by_year)
 ```
 
@@ -1302,8 +1321,10 @@ gss_svy_15 %>%
   summarize(mean_health = survey_mean(health, na.rm = TRUE)) %>% 
   ggplot(aes(x = age, y = mean_health, color = cohort)) +
   labs(title = "Age Profiles by Cohort") +
-  geom_line()
+  geom_smooth()
 ```
+
+    ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
 
 ![](srh_gss_weights_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
@@ -1433,12 +1454,20 @@ ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_30)) +
 ![](srh_gss_weights_files/figure-gfm/unnamed-chunk-12-3.png)<!-- -->
 
 ``` r
-  ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_65)) +
+ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_40)) +
   labs(title = "Predicted SRH at age 40 for each Cohort") +
   geom_point()
 ```
 
 ![](srh_gss_weights_files/figure-gfm/unnamed-chunk-12-4.png)<!-- -->
+
+``` r
+  ggplot(lm_health_v_age_cohorts, aes(x = cohort_mean, y = predict_65)) +
+  labs(title = "Predicted SRH at age 65 for each Cohort") +
+  geom_point()
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-12-5.png)<!-- -->
 
 ``` r
 # Plot many ages
@@ -1463,6 +1492,818 @@ p <- ggplot(lm_health_long, aes(x = cohort_mean, y = predicted_srh)) +
 print(p)
 ```
 
-![](srh_gss_weights_files/figure-gfm/unnamed-chunk-12-5.png)<!-- -->
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-12-6.png)<!-- -->
 
 # Facet by cohort
+
+``` r
+library(dplyr)
+library(purrr)
+library(survey)
+library(broom)
+
+weighted_lm_by_cohort <- gss_svy %>%
+  filter(cohort >= 1900 & cohort <= 1996) %>% 
+  mutate(cohort_cut = cut(cohort, breaks = 25)) %>% 
+  group_by(cohort_cut) %>%
+  group_map_dfr(~ {
+    # Create a survey design for the current group
+    survey_design <- .x %>%
+      as_survey_design(weights = wtsscomp)
+    
+    # Fit the weighted regression model
+    model <- svyglm(health ~ age, design = survey_design)
+    
+    # Extract model results
+    broom::tidy(model, conf.int = TRUE) %>%
+      mutate(cohort_cut = unique(.x$cohort_cut)) # Add cohort_cut for identification
+  }) %>%
+  filter(term == "age") %>%
+  select(cohort_cut, estimate, std.error, conf.low, conf.high, statistic, p.value) %>% 
+  mutate(cohort = map_dbl(cohort_cut, ~ mean(as.numeric(str_extract_all(.x, "\\d+")[[1]]))))
+
+
+
+
+knitr::kable(weighted_lm_by_cohort)
+```
+
+| cohort_cut | estimate | std.error | conf.low | conf.high | statistic | p.value | cohort |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| (1900,1904\] | 0.0103957 | 0.0114848 | -0.0122021 | 0.0329934 | 0.9051651 | 0.3660786 | 1902.0 |
+| (1904,1908\] | 0.0033715 | 0.0080859 | -0.0125258 | 0.0192688 | 0.4169637 | 0.6769338 | 1906.0 |
+| (1908,1912\] | -0.0100691 | 0.0062579 | -0.0223591 | 0.0022209 | -1.6090217 | 0.1081376 | 1910.0 |
+| (1912,1915\] | -0.0010101 | 0.0048005 | -0.0104324 | 0.0084122 | -0.2104243 | 0.8333875 | 1913.5 |
+| (1915,1919\] | -0.0083594 | 0.0035420 | -0.0153099 | -0.0014090 | -2.3600754 | 0.0184573 | 1917.0 |
+| (1919,1923\] | -0.0139124 | 0.0029043 | -0.0196103 | -0.0082145 | -4.7903157 | 0.0000019 | 1921.0 |
+| (1923,1927\] | -0.0083106 | 0.0031717 | -0.0145347 | -0.0020865 | -2.6202301 | 0.0089231 | 1925.0 |
+| (1927,1931\] | -0.0100812 | 0.0021737 | -0.0143454 | -0.0058170 | -4.6377475 | 0.0000039 | 1929.0 |
+| (1931,1935\] | -0.0100312 | 0.0018916 | -0.0137417 | -0.0063207 | -5.3031746 | 0.0000001 | 1933.0 |
+| (1935,1938\] | -0.0076803 | 0.0017834 | -0.0111781 | -0.0041824 | -4.3066491 | 0.0000176 | 1936.5 |
+| (1938,1942\] | -0.0130871 | 0.0015881 | -0.0162017 | -0.0099725 | -8.2405538 | 0.0000000 | 1940.0 |
+| (1942,1946\] | -0.0093313 | 0.0012835 | -0.0118482 | -0.0068144 | -7.2701412 | 0.0000000 | 1944.0 |
+| (1946,1950\] | -0.0128539 | 0.0012655 | -0.0153354 | -0.0103723 | -10.1574590 | 0.0000000 | 1948.0 |
+| (1950,1954\] | -0.0113104 | 0.0011643 | -0.0135932 | -0.0090276 | -9.7143904 | 0.0000000 | 1952.0 |
+| (1954,1958\] | -0.0119623 | 0.0011070 | -0.0141328 | -0.0097918 | -10.8059846 | 0.0000000 | 1956.0 |
+| (1958,1961\] | -0.0116131 | 0.0011675 | -0.0139022 | -0.0093240 | -9.9471614 | 0.0000000 | 1959.5 |
+| (1961,1965\] | -0.0112547 | 0.0013691 | -0.0139392 | -0.0085702 | -8.2208031 | 0.0000000 | 1963.0 |
+| (1965,1969\] | -0.0112571 | 0.0017213 | -0.0146327 | -0.0078816 | -6.5399161 | 0.0000000 | 1967.0 |
+| (1969,1973\] | -0.0135468 | 0.0027445 | -0.0189305 | -0.0081631 | -4.9360787 | 0.0000009 | 1971.0 |
+| (1973,1977\] | -0.0180904 | 0.0024655 | -0.0229264 | -0.0132544 | -7.3373883 | 0.0000000 | 1975.0 |
+| (1977,1981\] | -0.0167130 | 0.0029537 | -0.0225073 | -0.0109188 | -5.6582688 | 0.0000000 | 1979.0 |
+| (1981,1984\] | -0.0114228 | 0.0045355 | -0.0203212 | -0.0025244 | -2.5185017 | 0.0119138 | 1982.5 |
+| (1984,1988\] | -0.0163078 | 0.0061952 | -0.0284650 | -0.0041507 | -2.6323330 | 0.0086113 | 1986.0 |
+| (1988,1992\] | -0.0309308 | 0.0080227 | -0.0466800 | -0.0151816 | -3.8554043 | 0.0001253 | 1990.0 |
+| (1992,1996\] | -0.0063769 | 0.0129646 | -0.0318484 | 0.0190947 | -0.4918657 | 0.6230289 | 1994.0 |
+
+``` r
+summary(weighted_lm_by_cohort)
+```
+
+    ##        cohort_cut    estimate           std.error           conf.low       
+    ##  (1900,1904]: 1   Min.   :-0.030931   Min.   :0.001107   Min.   :-0.04668  
+    ##  (1904,1908]: 1   1st Qu.:-0.013087   1st Qu.:0.001588   1st Qu.:-0.02032  
+    ##  (1908,1912]: 1   Median :-0.011257   Median :0.002744   Median :-0.01463  
+    ##  (1912,1915]: 1   Mean   :-0.010470   Mean   :0.003866   Mean   :-0.01806  
+    ##  (1915,1919]: 1   3rd Qu.:-0.008359   3rd Qu.:0.004800   3rd Qu.:-0.01374  
+    ##  (1919,1923]: 1   Max.   : 0.010396   Max.   :0.012965   Max.   :-0.01043  
+    ##  (Other)    :19                                                            
+    ##    conf.high           statistic           p.value              cohort    
+    ##  Min.   :-0.015182   Min.   :-10.8060   Min.   :0.0000000   Min.   :1902  
+    ##  1st Qu.:-0.009324   1st Qu.: -7.3374   1st Qu.:0.0000000   1st Qu.:1925  
+    ##  Median :-0.006814   Median : -4.7903   Median :0.0000019   Median :1948  
+    ##  Mean   :-0.002880   Mean   : -4.9137   Mean   :0.1062249   Mean   :1948  
+    ##  3rd Qu.:-0.002086   3rd Qu.: -2.5185   3rd Qu.:0.0119138   3rd Qu.:1971  
+    ##  Max.   : 0.032993   Max.   :  0.9052   Max.   :0.8333875   Max.   :1994  
+    ## 
+
+``` r
+# Plot the coefficients with error bars
+weighted_lm_by_cohort %>% 
+ggplot(aes(x = cohort, y = estimate)) +
+  # geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                position=position_dodge(0.05)) +
+  # geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  labs(
+    title = "Coefficient of Age for Different Cohorts",
+    subtitle = "GSS Dataset",
+    x = "Cohort",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+``` r
+# Regress the age coefficients on year
+coef_model <- lm(estimate ~ cohort, data = weighted_lm_by_cohort)
+summary(coef_model)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = estimate ~ cohort, data = weighted_lm_by_cohort)
+    ## 
+    ## Residuals:
+    ##        Min         1Q     Median         3Q        Max 
+    ## -0.0130018 -0.0028254 -0.0000717  0.0018791  0.0126959 
+    ## 
+    ## Coefficients:
+    ##               Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)  0.3354943  0.0800708   4.190 0.000351 ***
+    ## cohort      -0.0001776  0.0000411  -4.321 0.000253 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.005675 on 23 degrees of freedom
+    ## Multiple R-squared:  0.4481, Adjusted R-squared:  0.4241 
+    ## F-statistic: 18.67 on 1 and 23 DF,  p-value: 0.0002529
+
+``` r
+# Plot the regression
+ggplot(weighted_lm_by_cohort, aes(x = cohort, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "GSS Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
+
+``` r
+weighted_lm_by_cohort
+```
+
+    ## # A tibble: 25 × 8
+    ##    cohort_cut  estimate std.error conf.low conf.high statistic    p.value cohort
+    ##    <fct>          <dbl>     <dbl>    <dbl>     <dbl>     <dbl>      <dbl>  <dbl>
+    ##  1 (1900,1904]  0.0104    0.0115   -0.0122   0.0330      0.905    3.66e-1  1902 
+    ##  2 (1904,1908]  0.00337   0.00809  -0.0125   0.0193      0.417    6.77e-1  1906 
+    ##  3 (1908,1912] -0.0101    0.00626  -0.0224   0.00222    -1.61     1.08e-1  1910 
+    ##  4 (1912,1915] -0.00101   0.00480  -0.0104   0.00841    -0.210    8.33e-1  1914.
+    ##  5 (1915,1919] -0.00836   0.00354  -0.0153  -0.00141    -2.36     1.85e-2  1917 
+    ##  6 (1919,1923] -0.0139    0.00290  -0.0196  -0.00821    -4.79     1.87e-6  1921 
+    ##  7 (1923,1927] -0.00831   0.00317  -0.0145  -0.00209    -2.62     8.92e-3  1925 
+    ##  8 (1927,1931] -0.0101    0.00217  -0.0143  -0.00582    -4.64     3.86e-6  1929 
+    ##  9 (1931,1935] -0.0100    0.00189  -0.0137  -0.00632    -5.30     1.32e-7  1933 
+    ## 10 (1935,1938] -0.00768   0.00178  -0.0112  -0.00418    -4.31     1.76e-5  1936.
+    ## # ℹ 15 more rows
+
+``` r
+knitr::kable(weighted_lm_by_cohort)
+```
+
+| cohort_cut | estimate | std.error | conf.low | conf.high | statistic | p.value | cohort |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| (1900,1904\] | 0.0103957 | 0.0114848 | -0.0122021 | 0.0329934 | 0.9051651 | 0.3660786 | 1902.0 |
+| (1904,1908\] | 0.0033715 | 0.0080859 | -0.0125258 | 0.0192688 | 0.4169637 | 0.6769338 | 1906.0 |
+| (1908,1912\] | -0.0100691 | 0.0062579 | -0.0223591 | 0.0022209 | -1.6090217 | 0.1081376 | 1910.0 |
+| (1912,1915\] | -0.0010101 | 0.0048005 | -0.0104324 | 0.0084122 | -0.2104243 | 0.8333875 | 1913.5 |
+| (1915,1919\] | -0.0083594 | 0.0035420 | -0.0153099 | -0.0014090 | -2.3600754 | 0.0184573 | 1917.0 |
+| (1919,1923\] | -0.0139124 | 0.0029043 | -0.0196103 | -0.0082145 | -4.7903157 | 0.0000019 | 1921.0 |
+| (1923,1927\] | -0.0083106 | 0.0031717 | -0.0145347 | -0.0020865 | -2.6202301 | 0.0089231 | 1925.0 |
+| (1927,1931\] | -0.0100812 | 0.0021737 | -0.0143454 | -0.0058170 | -4.6377475 | 0.0000039 | 1929.0 |
+| (1931,1935\] | -0.0100312 | 0.0018916 | -0.0137417 | -0.0063207 | -5.3031746 | 0.0000001 | 1933.0 |
+| (1935,1938\] | -0.0076803 | 0.0017834 | -0.0111781 | -0.0041824 | -4.3066491 | 0.0000176 | 1936.5 |
+| (1938,1942\] | -0.0130871 | 0.0015881 | -0.0162017 | -0.0099725 | -8.2405538 | 0.0000000 | 1940.0 |
+| (1942,1946\] | -0.0093313 | 0.0012835 | -0.0118482 | -0.0068144 | -7.2701412 | 0.0000000 | 1944.0 |
+| (1946,1950\] | -0.0128539 | 0.0012655 | -0.0153354 | -0.0103723 | -10.1574590 | 0.0000000 | 1948.0 |
+| (1950,1954\] | -0.0113104 | 0.0011643 | -0.0135932 | -0.0090276 | -9.7143904 | 0.0000000 | 1952.0 |
+| (1954,1958\] | -0.0119623 | 0.0011070 | -0.0141328 | -0.0097918 | -10.8059846 | 0.0000000 | 1956.0 |
+| (1958,1961\] | -0.0116131 | 0.0011675 | -0.0139022 | -0.0093240 | -9.9471614 | 0.0000000 | 1959.5 |
+| (1961,1965\] | -0.0112547 | 0.0013691 | -0.0139392 | -0.0085702 | -8.2208031 | 0.0000000 | 1963.0 |
+| (1965,1969\] | -0.0112571 | 0.0017213 | -0.0146327 | -0.0078816 | -6.5399161 | 0.0000000 | 1967.0 |
+| (1969,1973\] | -0.0135468 | 0.0027445 | -0.0189305 | -0.0081631 | -4.9360787 | 0.0000009 | 1971.0 |
+| (1973,1977\] | -0.0180904 | 0.0024655 | -0.0229264 | -0.0132544 | -7.3373883 | 0.0000000 | 1975.0 |
+| (1977,1981\] | -0.0167130 | 0.0029537 | -0.0225073 | -0.0109188 | -5.6582688 | 0.0000000 | 1979.0 |
+| (1981,1984\] | -0.0114228 | 0.0045355 | -0.0203212 | -0.0025244 | -2.5185017 | 0.0119138 | 1982.5 |
+| (1984,1988\] | -0.0163078 | 0.0061952 | -0.0284650 | -0.0041507 | -2.6323330 | 0.0086113 | 1986.0 |
+| (1988,1992\] | -0.0309308 | 0.0080227 | -0.0466800 | -0.0151816 | -3.8554043 | 0.0001253 | 1990.0 |
+| (1992,1996\] | -0.0063769 | 0.0129646 | -0.0318484 | 0.0190947 | -0.4918657 | 0.6230289 | 1994.0 |
+
+``` r
+summary(weighted_lm_by_cohort)
+```
+
+    ##        cohort_cut    estimate           std.error           conf.low       
+    ##  (1900,1904]: 1   Min.   :-0.030931   Min.   :0.001107   Min.   :-0.04668  
+    ##  (1904,1908]: 1   1st Qu.:-0.013087   1st Qu.:0.001588   1st Qu.:-0.02032  
+    ##  (1908,1912]: 1   Median :-0.011257   Median :0.002744   Median :-0.01463  
+    ##  (1912,1915]: 1   Mean   :-0.010470   Mean   :0.003866   Mean   :-0.01806  
+    ##  (1915,1919]: 1   3rd Qu.:-0.008359   3rd Qu.:0.004800   3rd Qu.:-0.01374  
+    ##  (1919,1923]: 1   Max.   : 0.010396   Max.   :0.012965   Max.   :-0.01043  
+    ##  (Other)    :19                                                            
+    ##    conf.high           statistic           p.value              cohort    
+    ##  Min.   :-0.015182   Min.   :-10.8060   Min.   :0.0000000   Min.   :1902  
+    ##  1st Qu.:-0.009324   1st Qu.: -7.3374   1st Qu.:0.0000000   1st Qu.:1925  
+    ##  Median :-0.006814   Median : -4.7903   Median :0.0000019   Median :1948  
+    ##  Mean   :-0.002880   Mean   : -4.9137   Mean   :0.1062249   Mean   :1948  
+    ##  3rd Qu.:-0.002086   3rd Qu.: -2.5185   3rd Qu.:0.0119138   3rd Qu.:1971  
+    ##  Max.   : 0.032993   Max.   :  0.9052   Max.   :0.8333875   Max.   :1994  
+    ## 
+
+``` r
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year_cohort <- lm(estimate ~ cohort, data = weighted_lm_by_cohort)
+
+weighted_lm_by_cohort
+```
+
+    ## # A tibble: 25 × 8
+    ##    cohort_cut  estimate std.error conf.low conf.high statistic    p.value cohort
+    ##    <fct>          <dbl>     <dbl>    <dbl>     <dbl>     <dbl>      <dbl>  <dbl>
+    ##  1 (1900,1904]  0.0104    0.0115   -0.0122   0.0330      0.905    3.66e-1  1902 
+    ##  2 (1904,1908]  0.00337   0.00809  -0.0125   0.0193      0.417    6.77e-1  1906 
+    ##  3 (1908,1912] -0.0101    0.00626  -0.0224   0.00222    -1.61     1.08e-1  1910 
+    ##  4 (1912,1915] -0.00101   0.00480  -0.0104   0.00841    -0.210    8.33e-1  1914.
+    ##  5 (1915,1919] -0.00836   0.00354  -0.0153  -0.00141    -2.36     1.85e-2  1917 
+    ##  6 (1919,1923] -0.0139    0.00290  -0.0196  -0.00821    -4.79     1.87e-6  1921 
+    ##  7 (1923,1927] -0.00831   0.00317  -0.0145  -0.00209    -2.62     8.92e-3  1925 
+    ##  8 (1927,1931] -0.0101    0.00217  -0.0143  -0.00582    -4.64     3.86e-6  1929 
+    ##  9 (1931,1935] -0.0100    0.00189  -0.0137  -0.00632    -5.30     1.32e-7  1933 
+    ## 10 (1935,1938] -0.00768   0.00178  -0.0112  -0.00418    -4.31     1.76e-5  1936.
+    ## # ℹ 15 more rows
+
+``` r
+# View the summary of the regression
+summary(lm_coef_vs_year_cohort)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = estimate ~ cohort, data = weighted_lm_by_cohort)
+    ## 
+    ## Residuals:
+    ##        Min         1Q     Median         3Q        Max 
+    ## -0.0130018 -0.0028254 -0.0000717  0.0018791  0.0126959 
+    ## 
+    ## Coefficients:
+    ##               Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)  0.3354943  0.0800708   4.190 0.000351 ***
+    ## cohort      -0.0001776  0.0000411  -4.321 0.000253 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.005675 on 23 degrees of freedom
+    ## Multiple R-squared:  0.4481, Adjusted R-squared:  0.4241 
+    ## F-statistic: 18.67 on 1 and 23 DF,  p-value: 0.0002529
+
+## Cohort facet
+
+``` r
+# health vs year per cohort
+gss_svy_gen %>% 
+  group_by(age, generation_three_sections) %>% 
+  summarize(mean_health = survey_mean(health)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ generation_three_sections) +
+  labs(title = "Self-Rated Health Over Time (Per Cohort)",
+       subtitle = "GSS Dataset",
+       x = "Age", 
+       y = "Average SRH",
+       )
+```
+
+# Stratify
+
+``` r
+library(dplyr)
+library(broom)
+library(ggplot2)
+
+
+weighted_lm_by_group <- gss_svy %>%
+  group_by(year, race, sex) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, race, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+library(dplyr)
+library(broom)
+library(ggplot2)
+library(purrr)
+
+# If you haven't already run it, here's the code to create weighted_lm_by_group
+# weighted_lm_by_group <- gss_svy %>%
+#   group_by(year, race, sex) %>%
+#   group_map_dfr(~ {
+#     model <- survey::svyglm(health ~ age, design = .x)
+#     tidy(model, conf.int = TRUE)
+#   }) %>%
+#   filter(term == "age") %>%
+#   select(year, race, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+# Nest data and fit models for slope calculations
+coef_info <- weighted_lm_by_group %>%
+  group_by(race, sex) %>%
+  nest() %>%
+  mutate(
+    mod = map(data, ~ lm(estimate ~ year, data = .x)),
+    tidied = map(mod, tidy),
+    glanced = map(mod, glance)
+  ) %>%
+  unnest(cols = c(tidied, glanced)) %>%
+  filter(term == "year") %>%
+  # We now have slope (estimate), p.value, and r.squared for each race-sex group
+  select(race, sex, slope = estimate, p.value, r.squared)
+
+# Determine annotation positions for each facet
+text_positions <- weighted_lm_by_group %>%
+  group_by(race, sex) %>%
+  summarize(
+    x_text = max(year),
+    y_text = max(estimate),
+    .groups = "drop"
+  )
+
+# Join slope info with positions
+coef_info <- left_join(coef_info, text_positions, by = c("race", "sex"))
+
+# Plot
+ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(race ~ sex) +
+  geom_text(
+    data = coef_info,
+    aes(
+      x = x_text,
+      y = y_text,
+      label = sprintf("Slope=%.3f, p=%.3f, R²=%.3f", slope, p.value, r.squared)
+    ),
+    hjust = 1, vjust = 1, 
+    size = 3
+  ) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "Stratified by Race and Sex",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+``` r
+library(tidyverse)
+
+library(dplyr)
+library(purrr)
+library(broom)
+
+weighted_lm_by_group <- gss_svy %>%
+  group_by(year, race, sex) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, race, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+coef_info <- weighted_lm_by_group %>%
+  group_by(race, sex) %>%
+  nest() %>%
+  mutate(
+    mod = map(data, ~ lm(estimate ~ year, data = .x)),
+    # Select only the columns you need from `tidy` and `glance`
+    tidied = map(mod, ~ tidy(.x) %>% select(term, estimate, p.value)),
+    glanced = map(mod, ~ glance(.x) %>% select(r.squared))
+  ) %>%
+  unnest(cols = tidied) %>%
+  filter(term == "year") %>%
+  unnest(cols = glanced) %>%
+  select(race, sex, slope = estimate, p.value, r.squared)
+
+text_positions <- weighted_lm_by_group %>%
+  group_by(race, sex) %>%
+  summarize(
+    x_text = max(year),
+    y_text = max(estimate),
+    .groups = "drop"
+  )
+
+coef_info <- left_join(coef_info, text_positions, by = c("race", "sex"))
+
+ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(race ~ sex) +
+  geom_text(
+    data = coef_info,
+    inherit.aes = FALSE, # turn off inheriting x/y from the main plot
+    aes(
+      x = x_text,
+      y = y_text,
+      label = sprintf("Slope=%.3e, p=%.3e, R²=%.3f", slope, p.value, r.squared)
+    ),
+    hjust = 1, vjust = 1, size = 3
+  ) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "Stratified by Race and Sex",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+``` r
+# Create age groups
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+# Compute weighted mean health by age group and year
+weighted_health_by_age <- gss_svy %>%
+  group_by(age_group, year) %>%
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  )
+
+ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
+#  geom_smooth(alpha = 0.2) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+
+``` r
+library(srvyr)
+
+# Convert to srvyr object
+gss_svy <- as_survey_design(gss_svy)
+
+# Now you can use mutate directly
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+# Compute weighted mean health by age group, year, race, and sex
+weighted_health_by_age <- gss_svy %>%
+  group_by(race, sex, age_group, year) %>%
+  summarise(
+    mean_health = srvyr::survey_mean(health, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(race ~ sex) +
+  # Add annotations for each line within each facet
+  # geom_text(
+  #   data = coef_info,
+  #   inherit.aes = FALSE,
+  #   aes(
+  #     x = x_text,
+  #     y = y_text,
+  #     label = sprintf("Slope=%.3e, p=%.3e, R²=%.3f", slope, p.value, r.squared),
+  #     color = age_group
+  #   ),
+  #   hjust = 0,  # left-align at x_text
+  #   vjust = 1,  # top-align at y_text
+  #   size = 3,
+  #   show.legend = FALSE # Don't want a separate legend for text color
+  # ) +
+  labs(
+    title = "Average SRH Per Year by Age Group, Stratified by Race and Sex",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+
+``` r
+gss_svy %>% 
+  group_by(sex, race, year) %>% 
+  summarize(n = n()) %>% 
+  group_by(sex, race ) %>% 
+  summarize(avg_year = mean(n))
+```
+
+    ## `summarise()` has grouped output by 'sex'. You can override using the `.groups`
+    ## argument.
+
+    ## # A tibble: 6 × 3
+    ## # Groups:   sex [2]
+    ##   sex   race  avg_year
+    ##   <fct> <fct>    <dbl>
+    ## 1 1     1        523. 
+    ## 2 1     2         75.5
+    ## 3 1     3         41.5
+    ## 4 2     1        622  
+    ## 5 2     2        122. 
+    ## 6 2     3         43.8
+
+We do not have enough power to do a stratification by race.
+
+## Stratify by sex and satfin
+
+``` r
+gss_svy %>% 
+  group_by(sex, satfin, year) %>% 
+  summarize(n = n()) %>% 
+  group_by(sex, satfin ) %>% 
+  summarize(avg_year = mean(n))
+```
+
+    ## `summarise()` has grouped output by 'sex'. You can override using the `.groups`
+    ## argument.
+
+    ## # A tibble: 6 × 3
+    ## # Groups:   sex [2]
+    ##   sex   satfin avg_year
+    ##   <fct>  <dbl>    <dbl>
+    ## 1 1          1     157.
+    ## 2 1          2     293.
+    ## 3 1          3     188.
+    ## 4 2          1     214.
+    ## 5 2          2     357.
+    ## 6 2          3     216.
+
+# Stratify
+
+``` r
+library(dplyr)
+library(broom)
+library(ggplot2)
+
+
+weighted_lm_by_group <- gss_svy %>%
+  group_by(year, satfin, sex) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, satfin, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+library(dplyr)
+library(broom)
+library(ggplot2)
+library(purrr)
+# 
+# # If you haven't already run it, here's the code to create weighted_lm_by_group
+# weighted_lm_by_group <- gss_svy %>%
+#   group_by(year, satfin, sex) %>%
+#   group_map_dfr(~ {
+#     model <- survey::svyglm(health ~ age, design = .x)
+#     tidy(model, conf.int = TRUE)
+#   }) %>%
+#   filter(term == "age") %>%
+#   select(year, satfin, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+# Nest data and fit models for slope calculations
+coef_info <- weighted_lm_by_group %>%
+  group_by(satfin, sex) %>%
+  nest() %>%
+  mutate(
+    mod = map(data, ~ lm(estimate ~ year, data = .x)),
+    tidied = map(mod, tidy),
+    glanced = map(mod, glance)
+  ) %>%
+  unnest(cols = c(tidied, glanced)) %>%
+  filter(term == "year") %>%
+  # We now have slope (estimate), p.value, and r.squared for each satfin-sex group
+  select(satfin, sex, slope = estimate, p.value, r.squared)
+
+# Determine annotation positions for each facet
+text_positions <- weighted_lm_by_group %>%
+  group_by(satfin, sex) %>%
+  summarize(
+    x_text = max(year),
+    y_text = max(estimate),
+    .groups = "drop"
+  )
+
+# Join slope info with positions
+coef_info <- left_join(coef_info, text_positions, by = c("satfin", "sex"))
+
+# Plot
+ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(satfin ~ sex) +
+  geom_text(
+    data = coef_info,
+    aes(
+      x = x_text,
+      y = y_text,
+      label = sprintf("Slope=%.3f, p=%.3f, R²=%.3f", slope, p.value, r.squared)
+    ),
+    hjust = 1, vjust = 1, 
+    size = 3
+  ) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "Stratified by satfin and Sex",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+``` r
+library(tidyverse)
+
+library(dplyr)
+library(purrr)
+library(broom)
+
+weighted_lm_by_group <- gss_svy %>%
+  group_by(year, satfin, sex) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(health ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, satfin, sex, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+coef_info <- weighted_lm_by_group %>%
+  group_by(satfin, sex) %>%
+  nest() %>%
+  mutate(
+    mod = map(data, ~ lm(estimate ~ year, data = .x)),
+    # Select only the columns you need from `tidy` and `glance`
+    tidied = map(mod, ~ tidy(.x) %>% select(term, estimate, p.value)),
+    glanced = map(mod, ~ glance(.x) %>% select(r.squared))
+  ) %>%
+  unnest(cols = tidied) %>%
+  filter(term == "year") %>%
+  unnest(cols = glanced) %>%
+  select(satfin, sex, slope = estimate, p.value, r.squared)
+
+text_positions <- weighted_lm_by_group %>%
+  group_by(satfin, sex) %>%
+  summarize(
+    x_text = max(year),
+    y_text = max(estimate),
+    .groups = "drop"
+  )
+
+coef_info <- left_join(coef_info, text_positions, by = c("satfin", "sex"))
+
+ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(satfin ~ sex) +
+  geom_text(
+    data = coef_info,
+    inherit.aes = FALSE, # turn off inheriting x/y from the main plot
+    aes(
+      x = x_text,
+      y = y_text,
+      label = sprintf("Slope=%.3e, p=%.3e, R²=%.3f", slope, p.value, r.squared)
+    ),
+    hjust = 1, vjust = 1, size = 3
+  ) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "Stratified by satfin and Sex",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+
+``` r
+# Create age groups
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+# Compute weighted mean health by age group and year
+weighted_health_by_age <- gss_svy %>%
+  group_by(age_group, year) %>%
+  summarise(
+    mean_health = survey_mean(health, na.rm = TRUE)
+  )
+
+ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
+#  geom_smooth(alpha = 0.2) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+
+``` r
+library(srvyr)
+
+# Convert to srvyr object
+gss_svy <- as_survey_design(gss_svy)
+
+# Now you can use mutate directly
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+gss_svy <- gss_svy %>%
+  mutate(age_group = cut(age, breaks = 6))
+
+# Compute weighted mean health by age group, year, satfin, and sex
+weighted_health_by_age <- gss_svy %>%
+  group_by(satfin, sex, age_group, year) %>%
+  summarise(
+    mean_health = srvyr::survey_mean(health, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+ggplot(weighted_health_by_age, aes(x = year, y = mean_health, color = age_group)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(satfin ~ sex) +
+  # Add annotations for each line within each facet
+  # geom_text(
+  #   data = coef_info,
+  #   inherit.aes = FALSE,
+  #   aes(
+  #     x = x_text,
+  #     y = y_text,
+  #     label = sprintf("Slope=%.3e, p=%.3e, R²=%.3f", slope, p.value, r.squared),
+  #     color = age_group
+  #   ),
+  #   hjust = 0,  # left-align at x_text
+  #   vjust = 1,  # top-align at y_text
+  #   size = 3,
+  #   show.legend = FALSE # Don't want a separate legend for text color
+  # ) +
+  labs(
+    title = "Average SRH Per Year by Age Group, Stratified by satfin and Sex",
+    subtitle = "GSS Dataset with Survey Weights",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+
+``` r
+gss_svy %>% 
+  group_by(sex, satfin, year) %>% 
+  summarize(n = n()) %>% 
+  group_by(sex, satfin ) %>% 
+  summarize(avg_year = mean(n))
+```
+
+    ## `summarise()` has grouped output by 'sex'. You can override using the `.groups`
+    ## argument.
+
+    ## # A tibble: 6 × 3
+    ## # Groups:   sex [2]
+    ##   sex   satfin avg_year
+    ##   <fct>  <dbl>    <dbl>
+    ## 1 1          1     157.
+    ## 2 1          2     293.
+    ## 3 1          3     188.
+    ## 4 2          1     214.
+    ## 5 2          2     357.
+    ## 6 2          3     216.

@@ -571,3 +571,254 @@ data_wvs_usa %>%
 
 ```
 
+# Cohort Effects
+
+## Generation Splitting
+
+```{r}
+
+# Create generations in data_ivs_usa
+data_ivs_usa_generations <- data_ivs_usa %>%
+  filter(cohort > 1900) %>%
+  mutate(
+    generation = factor(
+      case_when(
+        cohort >= 1901 & cohort <= 1927 ~ "Greatest (1901-1927)",
+        cohort >= 1928 & cohort <= 1945 ~ "Silent (1928-1945)",
+        cohort >= 1946 & cohort <= 1964 ~ "Boomers (1946-1964)",
+        cohort >= 1965 & cohort <= 1980 ~ "Gen X (1965-1980)",
+        cohort >= 1981 & cohort <= 1996 ~ "Millennials (1981-1996)",
+        cohort >= 1997 & cohort <= 2012 ~ "Gen Z (1997-2012)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest (1901-1927)",
+        "Silent (1928-1945)",
+        "Boomers (1946-1964)",
+        "Gen X (1965-1980)",
+        "Millennials (1981-1996)",
+        "Gen Z (1997-2012)"
+      )
+    ),
+    generation_two_sections = factor(
+      case_when(
+        generation == "Greatest (1901-1927)" & cohort <= 1914 ~ "Greatest Early (1901-1914)",
+        generation == "Greatest (1901-1927)" & cohort > 1914 ~ "Greatest Late (1915-1927)",
+        generation == "Silent (1928-1945)" & cohort <= 1936 ~ "Silent Early (1928-1936)",
+        generation == "Silent (1928-1945)" & cohort > 1936 ~ "Silent Late (1937-1945)",
+        generation == "Boomers (1946-1964)" & cohort <= 1955 ~ "Boomers Early (1946-1955)",
+        generation == "Boomers (1946-1964)" & cohort > 1955 ~ "Boomers Late (1956-1964)",
+        generation == "Gen X (1965-1980)" & cohort <= 1972 ~ "Gen X Early (1965-1972)",
+        generation == "Gen X (1965-1980)" & cohort > 1972 ~ "Gen X Late (1973-1980)",
+        generation == "Millennials (1981-1996)" & cohort <= 1988 ~ "Millennials Early (1981-1988)",
+        generation == "Millennials (1981-1996)" & cohort > 1988 ~ "Millennials Late (1989-1996)",
+        generation == "Gen Z (1997-2012)" & cohort <= 2004 ~ "Gen Z Early (1997-2004)",
+        generation == "Gen Z (1997-2012)" & cohort > 2004 ~ "Gen Z Late (2005-2012)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest Early (1901-1914)", "Greatest Late (1915-1927)",
+        "Silent Early (1928-1936)", "Silent Late (1937-1945)",
+        "Boomers Early (1946-1955)", "Boomers Late (1956-1964)",
+        "Gen X Early (1965-1972)", "Gen X Late (1973-1980)",
+        "Millennials Early (1981-1988)", "Millennials Late (1989-1996)",
+        "Gen Z Early (1997-2004)", "Gen Z Late (2005-2012)"
+      )
+    ),
+    generation_three_sections = factor(
+      case_when(
+        generation == "Greatest (1901-1927)" & cohort <= 1910 ~ "Greatest Early (1901-1910)",
+        generation == "Greatest (1901-1927)" & cohort > 1910 & cohort <= 1918 ~ "Greatest Mid (1911-1918)",
+        generation == "Greatest (1901-1927)" & cohort > 1918 ~ "Greatest Late (1919-1927)",
+        generation == "Silent (1928-1945)" & cohort <= 1934 ~ "Silent Early (1928-1934)",
+        generation == "Silent (1928-1945)" & cohort > 1934 & cohort <= 1940 ~ "Silent Mid (1935-1940)",
+        generation == "Silent (1928-1945)" & cohort > 1940 ~ "Silent Late (1941-1945)",
+        generation == "Boomers (1946-1964)" & cohort <= 1951 ~ "Boomers Early (1946-1951)",
+        generation == "Boomers (1946-1964)" & cohort > 1951 & cohort <= 1958 ~ "Boomers Mid (1952-1958)",
+        generation == "Boomers (1946-1964)" & cohort > 1958 ~ "Boomers Late (1959-1964)",
+        generation == "Gen X (1965-1980)" & cohort <= 1970 ~ "Gen X Early (1965-1970)",
+        generation == "Gen X (1965-1980)" & cohort > 1970 & cohort <= 1976 ~ "Gen X Mid (1971-1976)",
+        generation == "Gen X (1965-1980)" & cohort > 1976 ~ "Gen X Late (1977-1980)",
+        generation == "Millennials (1981-1996)" & cohort <= 1986 ~ "Millennials Early (1981-1986)",
+        generation == "Millennials (1981-1996)" & cohort > 1986 & cohort <= 1992 ~ "Millennials Mid (1987-1992)",
+        generation == "Millennials (1981-1996)" & cohort > 1992 ~ "Millennials Late / Gen Z (1993-2004)",
+        TRUE ~ "Other"
+      ),
+      levels = c(
+        "Greatest Early (1901-1910)", "Greatest Mid (1911-1918)", "Greatest Late (1919-1927)",
+        "Silent Early (1928-1934)", "Silent Mid (1935-1940)", "Silent Late (1941-1945)",
+        "Boomers Early (1946-1951)", "Boomers Mid (1952-1958)", "Boomers Late (1959-1964)",
+        "Gen X Early (1965-1970)", "Gen X Mid (1971-1976)", "Gen X Late (1977-1980)",
+        "Millennials Early (1981-1986)", "Millennials Mid (1987-1992)", 
+        "Millennials Late / Gen Z (1993-2004)"
+      )
+    )
+  )
+
+# Display counts for each generation category
+table(data_ivs_usa_generations$generation)
+table(data_ivs_usa_generations$generation_two_sections)
+table(data_ivs_usa_generations$generation_three_sections)
+
+
+```
+
+## Regression of SRH with Age and Cohorts
+
+```{r}
+
+
+# Create cohort groups (e.g., decades)
+data_ivs_usa <- data_ivs_usa %>%
+  mutate(cohort_group = cut(cohort, breaks = seq(1900, 2010, by = 10), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 10), seq(1909, 2009, by = 10), sep = "-")))
+
+# Cohort groups by 15 years
+data_ivs_usa_15 <- data_ivs_usa %>%
+  mutate(cohort_15_yr = cut(cohort, breaks = seq(1900, 2010, by = 15), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 15), 15 + seq(1900, 2000, by = 15), sep = "-")))
+
+# Cohort groups by 10 years
+data_ivs_usa_10 <- data_ivs_usa %>%
+  mutate(cohort_10_yr = cut(cohort, breaks = seq(1900, 2010, by = 10), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 10), seq(1909, 2009, by = 10), sep = "-")))
+
+# Cohort groups by 5 years
+data_ivs_usa_5 <- data_ivs_usa %>%
+  mutate(cohort_05_yr = cut(cohort, breaks = seq(1900, 2005, by = 5), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 5), 5 + seq(1900, 2000, by = 5), sep = "-")))
+
+# 15-year cohorts regression
+lm_cohort_15 <- lm(health ~ age + cohort_15_yr, data = data_ivs_usa_15)
+summary(lm_cohort_15)
+
+# 10-year cohorts regression
+lm_cohort_10 <- lm(health ~ age + cohort_10_yr, data = data_ivs_usa_10)
+summary(lm_cohort_10)
+
+# 5-year cohorts regression
+lm_cohort_5 <- lm(health ~ age + cohort_05_yr, data = data_ivs_usa_5)
+summary(lm_cohort_5)
+
+# Function to plot regression coefficients
+cohort_age_interation_figure <- function(lm_model, cohort_length_string) {
+  
+  # Prepare data for the plot
+  coef_data <- broom::tidy(lm_model) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(significant = ifelse(p.value < 0.05, "Significant", "Not Significant"),
+           term = ifelse(grepl("cohort_group", term), gsub("cohort_group", "", term), term))
+  
+  # Plot
+  ggplot(coef_data, aes(x = term, y = estimate, fill = significant)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+    labs(
+      title = paste0("Cohort Effects on SRH ", cohort_length_string),
+      subtitle = "IVS (USA)",
+      x = "Term (Age or Cohort Birthyear Group)",
+      y = "Coefficient Estimate",
+      fill = "Significance"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+}
+
+# Plot for 5-Year Cohorts
+data_ivs_usa_5 <- data_ivs_usa %>%
+  mutate(cohort_05_yr = cut(cohort, breaks = seq(1900, 2005, by = 5), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 5), 5 + seq(1900, 2000, by = 5), sep = "-"))) %>%
+  mutate(cohort_group = cohort_05_yr)
+
+lm_cohort_5 <- lm(health ~ age + cohort_group, data = data_ivs_usa_5)
+cohort_age_interation_figure(lm_cohort_5, "5-Year Cohorts")
+
+# Plot for 10-Year Cohorts
+data_ivs_usa_10 <- data_ivs_usa %>%
+  mutate(cohort_10_yr = cut(cohort, breaks = seq(1900, 2010, by = 10), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 10), seq(1909, 2009, by = 10), sep = "-"))) %>%
+  mutate(cohort_group = cohort_10_yr)
+
+lm_cohort_10 <- lm(health ~ age + cohort_group, data = data_ivs_usa_10)
+cohort_age_interation_figure(lm_cohort_10, "10-Year Cohorts")
+
+# Plot for 15-Year Cohorts
+data_ivs_usa_15 <- data_ivs_usa %>%
+  mutate(cohort_15_yr = cut(cohort, breaks = seq(1900, 2010, by = 15), right = FALSE,
+                            labels = paste(seq(1900, 2000, by = 15), 15 + seq(1900, 2000, by = 15), sep = "-"))) %>%
+  mutate(cohort_group = cohort_15_yr)
+
+lm_cohort_15 <- lm(health ~ age + cohort_group, data = data_ivs_usa_15)
+cohort_age_interation_figure(lm_cohort_15, "15-Year Cohorts")
+
+
+
+```
+
+## Generations
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(stringr)
+
+# Function to plot generation effects
+generation_age_interaction_figure <- function(lm_model, cohort_length_string) {
+  
+  # Extract predictor variable names excluding 'age'
+  vars <- all.vars(formula(lm_model))[-1]
+  vars_to_remove <- vars[vars != "age"]
+  
+  # Create a regex pattern to remove variable names
+  pattern <- paste0("^(", paste(vars_to_remove, collapse="|"), ")")
+  
+  # Prepare data for the plot
+  coef_data <- broom::tidy(lm_model) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      # Remove variable name prefixes from terms
+      term_cleaned = sub(pattern, "", term),
+      # Extract the first year from the term if available
+      first_year = ifelse(term_cleaned == "age", NA, as.numeric(stringr::str_extract(term_cleaned, "\\d{4}"))),
+      # Create a numeric key for ordering
+      term_numeric = ifelse(term_cleaned == "age", 0, first_year),
+      # Reorder terms based on the numeric key
+      term_cleaned = factor(term_cleaned, levels = term_cleaned[order(term_numeric)]),
+      significant = ifelse(p.value < 0.05, "Significant", "Not Significant")
+    )
+  
+  # Plotting
+  ggplot(coef_data, aes(x = term_cleaned, y = estimate, fill = significant)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+    labs(
+      title = "Generation (Cohort) Effects on SRH",
+      subtitle = "IVS (USA)",
+      x = "Term (Age or Generation Group)",
+      y = "Coefficient Estimate",
+      fill = "Significance"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+
+# Regression and plot for generation_two_sections
+lm_generation_two <- lm(health ~ age + generation_two_sections, data = data_ivs_usa_generations)
+generation_age_interaction_figure(lm_generation_two, "Generation Two Sections")
+
+# Regression and plot for generation
+lm_generation <- lm(health ~ age + generation, data = data_ivs_usa_generations)
+generation_age_interaction_figure(lm_generation, "Generations")
+
+# Regression and plot for generation_three_sections
+lm_generation_three <- lm(health ~ age + generation_three_sections, data = data_ivs_usa_generations)
+generation_age_interaction_figure(lm_generation_three, "Generation Three Sections")
+
+
+
+```
+
