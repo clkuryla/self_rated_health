@@ -1,0 +1,188 @@
+---
+title: "NHANES 3 and 4"
+author: "Christine Lucille Kuryla"
+date: "2024-12-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
+```
+
+# Import and check data
+
+For reference:
+### NHANES 3 
+```{r, eval = FALSE}
+
+library(SAScii)
+# nhanes3.tf <- tempfile()
+daturl <- "https://wwwn.cdc.gov/nchs/data/nhanes3/1a/adult.dat"
+code_url ="https://wwwn.cdc.gov/nchs/data/nhanes3/1a/adult.sas"
+# Sas_code <- url(code_url)
+# writeLines ( readLines(Sas_code) , con = nhanes3.tf )
+# nhanes3.fwf.parameters <- parse.SAScii( nhanes3.tf , beginline = 5 )
+# str( nhanes3.fwf.parameters )
+# #-----
+# 'data.frame':   90 obs. of  4 variables:
+#   $ varname: chr  "SEQN" "HYK1A" "HYK1B" "HYK2A" ...
+# $ width  : num  5 1 1 2 2 2 2 4 4 2 ...
+# $ char   : logi  FALSE FALSE FALSE FALSE FALSE FALSE ...
+# $ divisor: num  1 1 1 1 1 1 1 1 1 1 ...
+# #------
+
+daturl <- "https://wwwn.cdc.gov/nchs/data/nhanes3/1a/adult.dat"
+in.nhanes3 <- read.fwf(daturl, widths=nhanes3.fwf.parameters$width,
+                     col.names= nhanes3.fwf.parameters$varname)
+
+in2 <- read.SAScii( daturl, code_url)
+
+#write_csv(in2, "big_data/NHANES/nhanes_3/nhanes3.csv")
+
+nhanes3_data <- read_csv("big_data/NHANES/nhanes_3/nhanes3.csv")
+
+nhanes3_selected <- nhanes3_data %>% 
+  select(SEQN, 
+         DMPFSEQ, 
+         HSAGEIR, # age in years
+         HAB1, # self-rated health: 1:excellent, very good, good, fair, 5: poor (get rid of 6 and 7)
+         HSSEX, # 1 male, 2 female
+         SDPPHASE, # 1 1988-1991, 2 1991-1994 
+         HSDOIMO, # date of screener (month)
+         HSAGEU, # age unit
+         HSAITMOR # age in months at interview (screener)
+         ) %>% 
+  filter(HAB1 %in% 1:5) %>% 
+  mutate(age = HSAGEIR,
+         sex = ifelse(HSSEX == 1, "Male", "Female"),
+         year = ifelse(SDPPHASE == 1, 1989.5, 1992.5),
+         srh = 6 - HAB1)
+
+glimpse(nhanes3_selected)
+
+#write_csv(nhanes3_selected, "data/nhanes3_selected.csv")
+
+```
+
+### NHANES 4
+```{r, eval = FALSE}
+
+nhanes4_key <- read_csv("big_data/NHANES/nhanes_4/nhanes4_key.csv")
+
+library(tidyverse)
+library(haven)
+
+# Assume nhanes4_key is loaded
+
+# Separate keys by type of file (DEMO, HUQ) for simplicity
+demo_key <- nhanes4_key %>% filter(str_detect(nhanes_file, "^DEMO"))
+huq_key <- nhanes4_key %>% filter(str_detect(nhanes_file, "^HUQ"))
+
+# A helper function to read and process a given domain of files
+read_nhanes_domain <- function(key_table) {
+  # Get unique files for this domain
+  files <- key_table %>% distinct(nhanes_file)
+  
+  domain_data <- files %>%
+    mutate(
+      data = map(nhanes_file, ~ {
+        vars_for_file <- key_table %>% filter(nhanes_file == .x)
+        needed_vars <- c("SEQN", unique(vars_for_file$nhanes_var))
+        
+        file_path <- paste0("big_data/NHANES/nhanes_4/", .x, ".xpt")
+        
+        # Read and select needed variables
+        df <- read_xpt(file_path) %>%
+          select(any_of(needed_vars)) %>%
+          # Rename nhanes_var to my_var
+          rename_with(
+            .fn = ~ vars_for_file$my_var[match(., vars_for_file$nhanes_var)],
+            .cols = vars_for_file$nhanes_var
+          ) %>%
+          mutate(
+            nhanes_yr_1 = vars_for_file$nhanes_yr_1[1],
+            nhanes_yr_2 = vars_for_file$nhanes_yr_2[1]
+          )
+        
+        df
+      })
+    ) %>%
+    unnest(cols = data)  # Unnest after renaming done
+  
+  domain_data
+}
+
+
+# Read DEMO and HUQ data separately
+demo_data <- read_nhanes_domain(demo_key)
+huq_data <- read_nhanes_domain(huq_key)
+
+# Now join demo and huq data by SEQN and cycle years.
+# Note: If multiple cycles overlap, you may need to use both SEQN and nhanes_yr_1/nhanes_yr_2 as join keys.
+# Typically SEQN is unique within a cycle, so joining on SEQN and year information might be prudent.
+final_data <- demo_data %>%
+  full_join(huq_data, by = c("SEQN", "nhanes_yr_1", "nhanes_yr_2"))
+
+# Now select the columns you need:
+final_data <- final_data %>%
+  select(
+    SEQN,
+    age,
+    srh_huq010,
+    SDDSRVYR,
+    nhanes_yr_1,
+    nhanes_yr_2
+  )
+
+glimpse(final_data)
+
+nhanes4_selected <- final_data %>%
+  filter(srh_huq010 %in% 1:5) %>% 
+  mutate(srh = 6 - srh_huq010) %>% 
+  mutate(year = (nhanes_yr_1 + nhanes_yr_2 ) / 2 ) %>% 
+  mutate(cohort = year - age)
+
+glimpse(nhanes4_selected)
+
+write_csv(nhanes4_selected, "big_data/NHANES/nhanes_4/nhanes4_selected_apcsrh.csv")
+write_csv(nhanes4_selected, "data/nhanes4_selected_apcsrh.csv")
+
+```
+
+## Import and check formatted data
+
+```{r}
+
+nhanes3 <- read_csv("data/nhanes3_selected.csv") %>% 
+  select(SEQN, age, year, cohort, srh)
+
+nhanes4 <- read_csv("data/nhanes4_selected_apcsrh.csv") %>% 
+  select(SEQN, age, year, cohort, srh)
+
+nhanes_data <- rbind(nhanes3, nhanes4) 
+
+nhanes_data <- nhanes_data %>% 
+  na.omit() %>% 
+  filter(age >= 18)
+
+glimpse(nhanes_data)
+
+table(nhanes_data$srh)
+table(nhanes_data$year)
+table(nhanes_data$cohort)
+hist(nhanes_data$age)
+hist(nhanes_data$year)
+hist(nhanes_data$cohort)
+hist(nhanes_data$srh)
+
+```
+
+```{r}
+
+
+
+```
+
