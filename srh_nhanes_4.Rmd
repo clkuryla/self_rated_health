@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(broom)
 library(srvyr)
+library(here)
 ```
 
 
@@ -20,7 +21,7 @@ library(srvyr)
 ### For reference, importing data
 ```{r, eval = FALSE}
 
-nhanes4_key <- read_csv("big_data/NHANES/nhanes_4/nhanes4_key.csv") %>% 
+nhanes4_key <- read_csv(here("big_data/NHANES/nhanes_4/nhanes4_key.csv")) %>% 
   filter(year != 2018.5)
 
 library(tidyverse)
@@ -43,7 +44,7 @@ read_nhanes_domain <- function(key_table) {
         vars_for_file <- key_table %>% filter(nhanes_file == .x)
         needed_vars <- c("SEQN", unique(vars_for_file$nhanes_var))
         
-        file_path <- paste0("big_data/NHANES/nhanes_4/", .x, ".xpt")
+        file_path <- here(paste0("big_data/NHANES/nhanes_4/", .x, ".xpt"))
         
         # Read and select needed variables
         df <- read_xpt(file_path) %>%
@@ -82,7 +83,7 @@ demo_weight_data <- demo_key %>%
   distinct(nhanes_file) %>%   # One entry per DEMO file
   pull(nhanes_file) %>%
   map_df(~ {
-    file_path <- paste0("big_data/NHANES/nhanes_4/", .x, ".xpt")
+    file_path <- here(paste0("big_data/NHANES/nhanes_4/", .x, ".xpt"))
     df <- read_xpt(file_path)
     df %>%
       select(SEQN, any_of(c("SDMVSTRA", "SDMVPSU", "WTINT2YR")))
@@ -123,7 +124,7 @@ table(nhanes4_selected$year)
 
 ```{r}
 
-data_nhanes <- read_csv("data/nhanes4_selected_apcsrh.csv") %>% 
+data_nhanes <- read_csv(here("data/nhanes4_selected_apcsrh.csv")) %>% 
   mutate(age_group = as.factor( 
                             cut(
                             age,
@@ -142,7 +143,7 @@ data_nhanes_clk <- data_nhanes
 
 # Other weights
 # Gloria's Aim 2 Data
-original_df <- read.csv("/Users/christinekuryla/Documents/Columbia_Courses/QMSS Time Series Panel Forecasting/lab_1_self_rated_health/self_rated_health/big_data/NHANES/Gloria_preprocessed/Data-3/Core_Dataset_Aim2.csv")
+original_df <- read.csv(here("big_data/NHANES/Gloria_preprocessed/Data-3/Core_Dataset_Aim2.csv"))
 
 gloria_wts <- original_df %>% 
   select(SEQN, WTMEC2YR)
