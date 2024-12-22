@@ -125,7 +125,15 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
   mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
-  mutate(satfin = 4 - satfin) # same again!
+  mutate(satfin = 4 - satfin) %>% # same again! %>% 
+ mutate(
+    age_group = cut(
+      age,
+      breaks = c(17, 29, 39, 49, 59, 69, Inf),
+      labels = c("18-29", "30-39", "40-49", "50-59", "60-69", "70+"),
+      right = TRUE
+    )
+  ) 
 ```
 
     ## Rows: 72390 Columns: 22
@@ -135,6 +143,14 @@ data_gss <- read_csv("data/extracted_gss_variables.csv") %>%
     ## 
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+table(data_gss$age_group)
+```
+
+    ## 
+    ## 18-29 30-39 40-49 50-59 60-69   70+ 
+    ##  7911  8362  7015  6025  5225  4906
 
 ``` r
 # Create a survey design object using wtssall for multi-year analysis
@@ -170,9 +186,17 @@ gss_svy %>%
     ## 1        3.01        0.00479
 
 ``` r
-# Create age groups
-gss_svy <- gss_svy %>%
-  mutate(age_group = cut(age, breaks = 6))
+# # Create age groups
+# gss_svy <- gss_svy %>%
+#   mutate(
+#     age_group = cut(
+#       age,
+#       breaks = c(17, 25, 34, 44, 55, 65, Inf),
+#       labels = c("18-25", "26-34", "35-44", "45-55", "56-65", "66+"),
+#       right = TRUE
+#     )
+#   ) 
+# #  mutate(age_group = cut(age, breaks = 6))
 
 # Compute weighted mean health by age group and year
 weighted_health_by_age <- gss_svy %>%
@@ -2713,15 +2737,6 @@ stratify_coeff_plot("partyid", "Party ID")
 ```
 
 ``` r
-library(srvyr)
-
-# Convert to srvyr object
-gss_svy <- as_survey_design(gss_svy)
-
-# Now you can use mutate directly
-gss_svy <- gss_svy %>%
-  mutate(age_group = cut(age, breaks = 4))
-
 # Compute weighted mean health by age group, year, satfin, and sex
 weighted_health_by_age <- gss_svy %>%
   group_by(happy, sex, age_group, year) %>%
@@ -2886,3 +2901,322 @@ n_per_overlapping_strata_aggregated %>%
     ##  9 health sex             176.             5
     ## 10 sex    polviews        101.             5
     ## # ℹ 81 more rows
+
+# Trends of other variables
+
+## Average variable per year by age group
+
+``` r
+avg_var_per_year_by_age_plot <- function(var_name, var_char) {
+  var_sym <- rlang::sym(var_name)
+  
+  # Compute weighted mean health by the variable of interest, age group, and year
+  gss_svy %>%
+    group_by(age_group, year) %>%
+    summarise(
+      mean_var = srvyr::survey_mean(as.numeric(!!var_sym), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    ggplot(aes(x = year, y = mean_var, color = age_group)) +
+    geom_line() +
+    geom_point() +
+    labs(
+      title = paste0("Mean ", var_char, " Per Year by Age Group"),
+      subtitle = "GSS Dataset with Survey Weights",
+      x = "Year",
+      y = paste0("Mean ", var_char),
+      color = "Age Group"
+    ) +
+    theme_minimal()
+}
+
+avg_var_per_year_by_age_plot("health", "SRH")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("happy", "Happiness")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-2.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("satfin", "Financial Satisfaction")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-3.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("life", "Life Satisfaction")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-4.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("class", "Self-Assessed Class")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-5.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("polviews", "Political Views")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-6.png)<!-- -->
+
+``` r
+avg_var_per_year_by_age_plot("partyid", "Party ID")
+```
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-29-7.png)<!-- -->
+
+# Age Coeff Over Time For Different Variables
+
+``` r
+var_age_coeff_over_time_plot <- function(var_name, var_char) {
+  var_sym <- rlang::sym(var_name)
+  formula <- as.formula(paste0("as.numeric(", var_name, ") ~ age"))
+
+  weighted_lm_by_group <- gss_svy %>%
+    group_by(year) %>%
+    group_map_dfr(~ {
+      model <- survey::svyglm(formula, design = .x)
+      tidy(model, conf.int = TRUE)
+    }) %>%
+    filter(term == "age") %>%
+    select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+  coef_info <- weighted_lm_by_group %>%
+    summarise(
+      slope = lm(estimate ~ year)$coefficients["year"],
+      p.value = summary(lm(estimate ~ year))$coefficients["year", "Pr(>|t|)"],
+      r.squared = summary(lm(estimate ~ year))$r.squared
+    )
+
+  text_positions <- weighted_lm_by_group %>%
+    summarize(
+      x_text = min(year),
+      y_text = min(estimate) - 0.01,
+      .groups = "drop"
+    )
+
+  ggplot(weighted_lm_by_group, aes(x = year, y = estimate)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    geom_text(
+      data = coef_info,
+      aes(
+        x = text_positions$x_text,
+        y = text_positions$y_text,
+        label = sprintf("Slope = %.3e\np = %.3e\nR² = %.3f", slope, p.value, r.squared)
+      ),
+      hjust = 0, vjust = 0, size = 3
+    ) +
+    labs(
+      title = "Change in 'Age' Coefficient Over Years",
+      subtitle = paste0("Outcome: ", var_char),
+      x = "Year",
+      y = "Coefficient of Age"
+    ) +
+    theme_minimal()
+}
+
+var_age_coeff_over_time_plot("health", "SRH")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-1.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("happy", "Happiness")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-2.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("satfin", "Financial Satisfaction")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-3.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("life", "Life Satisfaction")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-4.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("class", "Self-Assessed Class")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-5.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("polviews", "Political Views")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-6.png)<!-- -->
+
+``` r
+var_age_coeff_over_time_plot("partyid", "Party ID")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-30-7.png)<!-- -->
+
+# Both Plots
+
+``` r
+diff_var_plots <- function(var_name, var_char){
+  gridExtra::grid.arrange(avg_var_per_year_by_age_plot(var_name, var_char), 
+                        var_age_coeff_over_time_plot(var_name, var_char),
+                        nrow = 1, 
+                        ncol = 2)
+}
+
+
+diff_var_plots("health", "SRH")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
+
+``` r
+diff_var_plots("happy", "Happiness")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-2.png)<!-- -->
+
+``` r
+diff_var_plots("satfin", "Financial Satisfaction")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-3.png)<!-- -->
+
+``` r
+diff_var_plots("life", "Life Satisfaction")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-4.png)<!-- -->
+
+``` r
+diff_var_plots("class", "Self-Perceived Class")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-5.png)<!-- -->
+
+``` r
+diff_var_plots("polviews", "Political Views")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-6.png)<!-- -->
+
+``` r
+diff_var_plots("partyid", "Party ID")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](srh_gss_weights_files/figure-gfm/unnamed-chunk-31-7.png)<!-- -->
+
+``` r
+gridExtra::grid.arrange(avg_var_per_year_by_age_plot("health", "SRH"), 
+                        var_age_coeff_over_time_plot("health", "SRH"),
+                        avg_var_per_year_by_age_plot("happy", "Happiness"),
+                        var_age_coeff_over_time_plot("happy", "Happiness"),
+                        avg_var_per_year_by_age_plot("satfin", "Financial Satisfaction"),
+                        var_age_coeff_over_time_plot("satfin", "Financial Satisfaction"),
+                        avg_var_per_year_by_age_plot("life", "Life Satisfaction"),
+                        var_age_coeff_over_time_plot("life", "Life Satisfaction"),
+                        avg_var_per_year_by_age_plot("class", "Self-Assessed Class"),
+                        var_age_coeff_over_time_plot("class", "Self-Assessed Class"),
+                        avg_var_per_year_by_age_plot("polviews", "Political Views"),
+                        var_age_coeff_over_time_plot("polviews", "Political Views"),
+                        avg_var_per_year_by_age_plot("partyid", "Party ID"),
+                        var_age_coeff_over_time_plot("partyid", "Party ID"),
+                        nrow = 7, 
+                        ncol = 2)
+```
+
+``` r
+gss_svy %>%
+    group_by(age_group, year) %>%
+    summarise(
+      mean_var = srvyr::survey_mean(as.numeric(partyid), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    ggplot(aes(x = year, y = mean_var, color = age_group)) +
+    geom_line() +
+    geom_point() +
+    labs(
+      title = paste0("Mean ", "Party ID", " Per Year by Age Group"),
+      subtitle = "GSS Dataset with Survey Weights",
+      x = "Year",
+      y = paste0("Mean ", "Party ID"),
+      color = "Age Group"
+    ) +
+    theme_minimal()
+
+
+gss_svy %>%
+    filter(age_group != "70+") %>% 
+    group_by(age_group, year) %>%
+    summarise(
+      mean_var = srvyr::survey_mean(as.numeric(partyid), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    ggplot(aes(x = year, y = mean_var, color = age_group)) +
+    geom_line() +
+    geom_point() +
+    labs(
+      title = paste0("Mean ", "Party ID", " Per Year by Age Group"),
+      subtitle = "GSS Dataset with Survey Weights",
+      x = "Year",
+      y = paste0("Mean ", "Party ID"),
+      color = "Age Group"
+    ) +
+    theme_minimal()
+
+gss_svy %>%
+    filter(age_group == "70+") %>% 
+    group_by(age_group, year) %>%
+    summarise(
+      mean_var = srvyr::survey_mean(as.numeric(partyid), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    ggplot(aes(x = year, y = mean_var, color = age_group)) +
+    geom_line() +
+    geom_point() +
+    labs(
+      title = paste0("Mean ", "Party ID", " Per Year by Age Group"),
+      subtitle = "GSS Dataset with Survey Weights",
+      x = "Year",
+      y = paste0("Mean ", "Party ID"),
+      color = "Age Group"
+    ) +
+    theme_minimal()
+```

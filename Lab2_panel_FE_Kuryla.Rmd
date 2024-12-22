@@ -1,0 +1,302 @@
+---
+title: "Lab 2 - Fixed/Random Effects"
+author: "Christine Lucille Kuryla"
+date: "2024-11-16"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plm)
+library(stargazer)
+
+```
+
+# Analysis and data description
+
+This analysis uses panel data from NLSY97 (National Longitudinal Survey Youth 1997), a longitudinal survey conducted in the United States. More information and data can be found here: https://www.bls.gov/nls/nlsy97.htm
+
+A fixed and random effects analysis is performed.
+
+A total of 6 waves have the variables of interest, so we do not explore first differences in the main analysis, just fixed and random effects.
+
+## Variable Descriptions
+
+### Outcome variable: `health`
+Our outcome variable of interest is self-rated health. It has been reverse coded such that in this analysis, the values represent:   
+
+* 5 - "Excellent"   
+* 4 - "Very good"   
+* 3 - "Good"   
+* 2 - "Fair"   
+* 1 - "Poor"   
+
+### Main predictor: `watched_tv`
+Our main predictor variable of interest is how often the participant watches TV. The interpretation ranges from 1 (No TV) to 6 (10+ hours per week). The values are described below. 
+
+* 1 - "None" 
+* 2 - "Less than 1 hour a week" 
+* 3 - "1 to 3 hours a week" 
+* 4 - "4 to 6 hours a week" 
+* 5 - "7 to 9 hours a week" 
+* 6 - "10 hours or more a week" 
+
+### Other predictor: `felt_happy`  
+How often the respondent felt happy in the last month.  
+This variable has been recoded such that it ranges from:  
+
+* 4 - "All of the time"  
+* 3 - "Most of the time"  
+* 2 - "Some of the time"  
+* 1 - "None of the time"  
+
+### Other predictor: `depressed`
+How often the respondent was depressed in the last month.  
+This variable has been recoded such that it ranges from:  
+
+* 4 - "All of the time"  
+* 3 - "Most of the time"  
+* 2 - "Some of the time"  
+* 1 - "None of the time"  
+
+
+
+
+# Load and explore data
+
+```{r message=FALSE}
+
+data <- read_csv("data/panel/nlsy97_selected.csv")  %>% 
+  filter(year != 2008) # there were not enough observations in this wave
+
+# Number of participants
+data %>% 
+  pull(id) %>% 
+  unique %>% 
+  length()
+
+# Number of waves
+data %>% 
+  pull(year) %>% 
+  unique()
+
+# SRH over time
+data %>% 
+  group_by(year) %>% 
+  summarize(mean_srh = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_srh)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Self-Rated Health Over 4 Waves",
+       x = "Panel Wave Year",
+       y = "Mean Self-Rated Health")
+
+# SRH in each wave
+data %>% 
+  group_by(year) %>% 
+  ggplot(aes(x = health)) +
+  geom_histogram() +
+  facet_wrap(~ year) +
+  labs(title = "Histogram of SRH in 4 Waves",
+       x = "Self-Rated Health",
+       y = "Count")
+
+```
+
+There are `r data %>% pull(id) %>% unique %>% length()` participants who were surveyed in 4 waves of interest: years 2002, 2010, 2015, 2017. Self-rated health overall seems to have decreased over time, although not at a constant rate. 
+
+# a) OLS
+
+1. (a) Run an OLS regression, including at least one independent variable and a time variable (as dummies).  Explain how you think your independent variable relates to your dependent variable.  Interpret your results.  Did you find what you expected to find?  
+
+```{r}
+
+library(plm)
+
+# OLS regression
+summary(lm(health ~ watched_tv + as.factor(year), data))
+
+eq.pool_tv <- plm(health ~ watched_tv + as.factor(year), # model formula
+               index = c("id", "year"), # id & time variables
+               model = "pooling", 
+               data = data) ## this is equivalent to above OLS ##
+
+summary(eq.pool_tv)
+
+```
+
+According to the OLS regression, *watching more TV is associated with a very slight, but statistically significant decrease in self-rated health*. Additionally, every wave has a statistically significantly lower average self-rated health score than the reference wave (2002). 
+
+Specifically,for each additional unit of time spent watching TV, the self-rated health score decreases by approximately 0.0727 points, and the 2nd, 3rd, and 4th waves have a decreased self-rated health (controling for TV watching) of -0.215, -0.274, and -0.269. respectively. All of these decreases are statistically significant to a significance level of 0.05. The R-squared was 0.019, indicating that the model accounted for 1.9% of the variability in self-related health scores. 
+
+This is what I expected to find because watching TV can lead to sedentary behavior and other mental results that may decrease health, and thus self-rated health. I also expected the SRH to decrease in later waves because the participants are older, so their SRH should decline.
+
+# b) Fixed Effects
+
+(b) Then run a fixed effect model version of that OLS model.  Interpret your results.  Did you find what you expected to find?  Why?  Why not? 
+
+```{r}
+
+eq.fe_tv <- plm(health ~ watched_tv + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "within", 
+             data = data) ## fixed effects ##
+
+summary(eq.fe_tv)
+
+```
+
+According to the fixed effects model, *watching more TV is still associated with a very slight, but still statistically significant decrease in self-rated health*. Additionally, every wave has still a statistically significantly lower average self-rated health score than the reference wave (2002). The *magnitude of all of the coefficients has decreased*. The adjusted R2 is now negative.
+
+This is as expected for the reasons described above, and the decrease in magnitude of the effect is also expected, because that is usually the result when comparing a pooled to a fixed effects model. The adjusted R2 is now negative, but that sometimes what happens in fixed effects models.
+
+
+# c) Additional predictor
+
+(c) Then include an additional predictor in your fixed effects model that you think might account for the initial relationship you found between your X and your Y.  What effect does that new independent variable have in your new regression?
+
+```{r}
+
+eq.fe_tv_depressed <- plm(health ~ watched_tv + depressed + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "within", 
+             data = data) ## fixed effects ##
+summary(eq.fe_tv_depressed)
+
+eq.fe_tv_happy <- plm(health ~ watched_tv + felt_happy + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "within", 
+             data = data) ## fixed effects ##
+
+summary(eq.fe_tv_happy)
+
+```
+
+Two additional variables were added to explore the relationship between watching TV and self rated health.  
+
+*Depression*: Adding the variable of how often the respondent has felt depressed in the last month resulted in a negative, statistically significant association (coefficient -0.1295) between frequency of feeling depressed and self rated health. This makes sense, because depression is known to affect health in a negative way. Additionally, the coefficient for watching TV only *very* slightly decreases (-0.01179 when only watched_tv is included in the model, versus -0.01086 when depression is added to the model as well), which means *feeling depressed does not explain the negative effect of watching TV on self-rated health*. Both coefficients are statistically significant, which means that both watching TV and feeling depressed are associated with lower self-rated health, even when controling for each other.
+
+*Felt Happy*: Although depression proved to be unrelated to watching TV's association with self rated health, it may still be possible that watching TV could make one less happy (or vice versa), and that could be a mechanism through which watching TV could result in lower self-rated health. To explore this, the model was run with watched_tv and felt_happy. The results from the model were that felt_happy was rather strongly associated (coefficient of 0.177) with increased self rated health, which is to be expected, as happier people report better health. Interestingly, the coefficient on watched_tv decreases in magnitude and is no longer statistically significantly associated with self-rated health. This means that *watching TV was no longer statistically significantly associated with self-rated health when controlling for how often the participant felt happy*. This suggests that *the way in which watching TV has an effect on self-rated health may be through its relationship with frequency of feeling happy*. 
+
+As a quick sanity check, below I ran a fixed effects model on happiness using watched_tv as the predictor variable and explore the results. It is indeed true that watching TV is associated in lower frequency of being happy. 
+
+```{r}
+
+ eq.fe_tv_on_happy <- plm(felt_happy ~ watched_tv + as.factor(year), # model formula
+                    index = c("id", "year"), # id & time variables
+                    model = "within", 
+                    data = data) ## fixed effects ##
+ summary(eq.fe_tv_on_happy)
+
+```
+
+
+# d) Random Effects
+
+(d) Then run a random effects model equivalent to your fixed effects model in step (b).  Interpret the results.
+
+```{r}
+
+eq.re_tv <- plm(health ~ watched_tv + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "random", 
+             data = data) ## random effects ##
+
+summary(eq.re_tv)
+
+```
+
+The coefficient for the random effects model is statistically significant, with a value of -0.038, which is between the OLS and fixed effects model, as expected due to the differences in the model assumptions. As before, it suggests that watching TV is slightly associated with a lower self-rated health. The idiosyncratic (within-individual) effect accounts for 52% of the variance and the individual effect (between individual) accounts for 40% of the variance. This indicates a large amount of between individual variability. 
+
+# e) Hausman test
+
+(e) Run a Hausman test to compare your fixed effects and your random effects models.  What do you conclude? 
+
+```{r}
+library(stargazer)
+
+phtest(eq.fe_tv, eq.re_tv) ## Hausman test comparing RE and FE ##
+```
+
+The Hausman test compares the FE and RE models to see if there is a significant difference in the coefficients. The very low p-value indicates that there is a difference in the coefficients, which suggests that the random effects model is inconsistent. This means that the individual effects are correlated with the regressors. Hence, the fixed effects model is preferred. 
+
+# Different Models Summary
+
+```{r}
+
+stargazer(eq.pool_tv, eq.fe_tv, eq.re_tv, 
+          title="Pooled, Fixed Effects, and Random Effects", 
+          align=TRUE, 
+          dep.var.labels=c("Equalize"), 
+          no.space=TRUE, 
+          column.labels=c("Pooled", 
+                          "Fixed Effects", "Random Effects"), 
+          dep.var.caption="", 
+          model.numbers=FALSE,
+          type = "text", omit = "Constant")
+
+```
+
+When modeling self-rated health as the outcome variable and watching TV as the predictor variable, all three models result in a small, statistically significant association. As expected the largest coefficient is found in the OLS, followed by RE, followed by FE. This pattern also holds for the coefficients of each wave compared to the reference wave. 
+
+
+
+# Additional Analyses
+
+## FE for different combinations of predictor variables
+
+```{r}
+
+
+eq.fe_happy_depressed <- plm(health ~ felt_happy + depressed + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "within", 
+             data = data) ## fixed effects ##
+summary(eq.fe_happy_depressed)
+
+eq.fe_tv_happy_depressed <- plm(health ~ watched_tv + felt_happy + depressed + as.factor(year), # model formula
+             index = c("id", "year"), # id & time variables
+             model = "within", 
+             data = data) ## fixed effects ##
+summary(eq.fe_tv_happy_depressed)
+
+
+
+```
+
+
+## Comparison
+
+```{r}
+
+stargazer(eq.fe_tv_happy, eq.fe_tv_depressed, eq.fe_happy_depressed, #eq.fe_tv_happy_depressed,
+          title="FE Results", 
+          align=TRUE, 
+          dep.var.labels=c("Equalize"), 
+       #   covariate.labels=c("Bills","2010"),  
+          no.space=TRUE, 
+          column.labels=c("FE TV + Happy", 
+                          "FE TV + Depressed", 
+                          "FE Depressed + Happy" #,
+                         # "FE TV + Depressed + Happy"
+                          ), 
+          dep.var.caption="", 
+          model.numbers=FALSE,
+          type = "text", omit = "Constant")
+
+```
+
+
+
+# Overall Summary
+
+The goal of this analysis was to explore the relationship between watching TV and self-rated health. A normal OLS ("pooled"), fixed effects, and random effects models were run on this relationship with wave as a dummy variable. In all three scenarios, watching TV has a small, negative, statistically significant effect on self-rated health, and all three waves have a statistically significant negative association as well. This suggests that watching TV is associated with a slightly lower self-rated health, and that self-rated health decreassed in the later waves when compared to the first wave. A Hausman test was performed to explore the appropriateness of the random effects model, and found to be statistially significant, hence, the random effects model is likely bias and the fixed effects model is preferred.
+
+When exploring the effect of frequency of depression and feelings of happiness on self-rated health, we see that depression has a negative association with self-rated health, but it is not related to the relationship of watching TV with self-rated health (that is, controlling for feeling depressed does not change the association between watching TV and SRH very much). However, when controlling for feeling happy, the effect of watching TV and lower self-rated health becomes insignificant, suggesting that watching TV is associated with lower self rated health through its relationship with feeling happy. 
+
+These findings suggest that policies aimed at improving health, as operationalized by self-rated health, should focus on feelings of happiness in a holistic manner more than solely decreasing hours of watching TV. 

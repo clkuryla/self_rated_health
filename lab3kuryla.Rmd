@@ -1,0 +1,562 @@
+---
+title: "Lab 3 - Education and Life Satisfaction Time Series"
+author: "Christine Lucille Kuryla"
+date: "2024-12-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#load packages
+library(QMSS)
+library(ggplot2)
+library(plyr)
+library(car)
+library(fUnitRoots)
+library(lmtest)
+library(corrplot)
+library(tidyverse)
+library(forecast)
+
+library(conflicted)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::summarize)
+conflicts_prefer(dplyr::select)
+conflicts_prefer(dplyr::mutate)
+conflicts_prefer(dplyr::rename)
+conflicts_prefer(dplyr::filter)
+```
+
+# Introduction
+
+Does having a college degree increase life excitement and satisfaction? Naively, there seems to be a relationship. Our question in this lab is whether having a bachelor degree is related to life satisfaction over time in the way they are related at the individual level. In other words, as more of our population is getting bachelor's and college degrees, are their lifes getting more exciting (higher life satisfaction)?
+
+The variables we will be using come from the GSS dataset. 
+
+### Variable: life
+
+"In general, do you find life exciting, pretty routine, or dull?"
+
+1	Exciting	
+2	Routine	
+3	Dull
+
+We will recode to the more intuitive
+3	Exciting	
+2	Routine	
+1	Dull
+
+We will also dichotomize it so that exciting_life = 1 if people respond "exciting" and exciting_life = 0 otherwise.
+
+### Variable: degree / baplus
+
+0	Less than high school	
+1	High school	
+2	Associate/junior college	
+3	Bachelor's	
+4	Graduate
+
+We will dichotomize it so that baplus = 1 if people have a bachelors or graduate degree and baplus = 0 otherwise.
+
+## Naive Relationship
+
+
+```{r include=TRUE}
+
+
+gss_for_ts <- read_csv("data/gss_raw_subset_for_ts.csv") %>% 
+       mutate(happiness = ifelse(happy == 1, 1, 0),
+              excellent_health = ifelse(health == 1, 1, 0),
+              good_health = ifelse(health == 2, 1, 0),
+              fair_health = ifelse(health == 3, 1, 0),
+              poor_health = ifelse(health == 4, 1, 0),
+              exciting_life = ifelse(life == 1, 1, 0),
+              nonextreme_views = ifelse(polviews %in% c(3, 4, 5), 1, 0),
+              extreme_views = ifelse(polviews %in% c(1, 2, 6, 7), 1, 0),
+              moderate_views = ifelse(polviews == 4, 1, 0),
+              cohort = floor(year - age),
+              over50 = ifelse(age >= 50, 1, 0),
+              boomer = ifelse(cohort >= 1946 & cohort <= 1964, 1, 0) ,
+              millenial = ifelse(cohort >= 1981 & cohort <= 1996, 1, 0) ,
+              bornin40s = ifelse(cohort >= 1940 & cohort <= 1949, 1, 0),
+              sat_w_finances = ifelse(satfin == 1, 1, 0),
+              income = realinc) %>% 
+    mutate(life = 4 - life) %>% # more intuitive
+    mutate(baplus = ifelse(degree >= 3, 1, 0)) %>% # Dichotomise bachelors/graduate vs no bachelors/graduate 
+    mutate(happy = 4 - happy) %>% 
+    mutate(health = 5 - health) 
+
+```
+
+
+```{r}
+
+# gss_for_ts <- read_csv("data/gss_raw_subset_for_ts.csv") %>% 
+#   mutate(life = 4 - life) %>% # more intuitive
+#   mutate(baplus = ifelse(degree >= 3, 1, 0)) %>% # Dichotomise bachelors/graduate vs no bachelors/graduate 
+#   mutate(exciting_life = ifelse(life == 1, 1, 0)) %>% 
+#   mutate(happy = 4 - happy) %>% 
+#   mutate(health = 5 - health) 
+
+colnames(gss_for_ts)
+
+# Correlation between the variables?
+gss_for_ts %>% 
+  dplyr::select(degree, life) %>% 
+  na.omit() %>% 
+  cor()
+
+# Yes, and it is positive.
+
+# Dichotomize bachelors vs no bachelors and visualize it
+gss_for_ts %>% 
+  select(baplus, life, year) %>% 
+  na.omit() %>% 
+  mutate(life = factor(life, 
+                      levels = 1:3,
+                      labels = c("Dull Life", "Routine Life", "Exciting Life"))) %>%
+  mutate(baplus = factor(baplus,
+                   levels = c(0, 1),
+                   labels = c("No Degree", "Degree"))) %>% 
+  dplyr::count(life, baplus) %>%
+  group_by(baplus) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+     ggplot(aes(x = factor(baplus), y = percent, fill = factor(life))) +
+     geom_bar(stat = "identity", position = "dodge") +
+     labs(
+         title = "Life Satisfaction by Education Level",
+         x = "Bachelors Degree",
+         y = "Percent",
+         fill = "Life Satisfaction"
+     ) +
+     theme_minimal()
+```
+
+# Time Series Analysis
+
+## Q1: Create time series and interpolate
+1. Create a multivariate time series; perform any interpolations.  
+
+```{r}
+
+# get means by year
+by.year <- aggregate(subset(gss_for_ts, sel = -year), list(year = gss_for_ts$year), mean, na.rm = T) 
+
+# interpolate for some missing years
+
+# First, add the extra years
+unique(gss_for_ts$year) # years in dataset
+extra_years <- setdiff(seq(1972, 2018), unique(gss_for_ts$year)) # years missing for a continus TS; skip 2020+ because of covid
+dim(by.year)[1] # number of years in original data (34)
+length(extra_years) # number of years to add (15)
+dim(by.year)[1] + length(extra_years) # sum (49)
+by.year[35:49, "year"] <- as.vector(extra_years) # add the extra years
+by.year <- dplyr::arrange(by.year, year) # arrange by year
+
+# Now make a time series object by.year.ts and interpolate using na.approx
+by.year.ts <- ts(by.year)
+by.year.ts <- na.approx(by.year.ts)
+
+# calculate pct 
+by.year.ts <- as.data.frame(by.year.ts)
+by.year.ts <- mutate(by.year.ts, 
+                     happy_pct = happiness*100,
+                     excellent_health_pct = excellent_health*100,
+                     exciting_life_pct = exciting_life*100,
+                     boomer_pct = boomer*100,
+                     bornin40s_pct = bornin40s*100,
+                     over50_pct = over50*100,
+                     sat_w_finances_pct = sat_w_finances*100,
+                #     millenial_pct = millenial*100,
+                     ba_pct = baplus*100)
+
+# get rid of 1972,1973, after 2018 and convert back to time series object
+ by.year.ts <- ts(subset(by.year.ts, year >= 1974 & year <= 2018))
+
+head(by.year.ts)
+colnames(by.year.ts)
+
+# correlations
+cor.vars <- c("exciting_life_pct", "ba_pct", "happy_pct", "age", "income", "year", "excellent_health_pct", "boomer_pct", "sat_w_finances_pct", "bornin40s_pct")
+# cor.vars <- colnames(by.year.ts)
+cor.dat <- by.year.ts[, cor.vars]
+
+
+
+corrplot::corrplot(cor(cor.dat))
+
+
+
+```
+
+Exiting life and percent with a higher degree are positively correlated with year, which suggests that both increase as time passes. The percent of the population with a bachelors or higher is positively correlated with people reporting a more exciting life, which suggestions that as the proportion of the population with a bachelors or higher increases, life satisfaction/ excitement also tends to increase. 
+
+## Q2: Graph relationships
+
+2. Graph the relationships between X and Y.  Explain how you think Y should relate to your key Xs.
+
+```{r}
+library(reshape2)
+
+
+meltMyTS <- function(mv.ts.object, time.var, keep.vars){
+  # mv.ts.object = a multivariate ts object
+  # keep.vars = character vector with names of variables to keep 
+  # time.var = character string naming the time variable
+  require(reshape2)
+  
+  if(missing(keep.vars)) {
+    melt.dat <- data.frame(mv.ts.object)
+  }
+  else {
+    if (!(time.var %in% keep.vars)){
+      keep.vars <- c(keep.vars, time.var)
+    }
+    melt.dat <- data.frame(mv.ts.object)[, keep.vars]
+  }
+  melt.dat <- melt(melt.dat, id.vars = time.var)
+  colnames(melt.dat)[which(colnames(melt.dat) == time.var)] <- "time"
+  return(melt.dat)
+}
+
+# Make a character vector naming the variables we might want to plot
+keep.vars <- c("year", "happy_pct", "age", "ba_pct", "income", "excellent_health_pct", "exciting_life_pct")
+keep.vars <- setdiff(colnames(by.year.ts), "year")
+
+# Use meltMyTS to transform the data to a 3-column dataset containing a column
+# for time, a column for variable names, and a column of values corresponding to
+# the variable names
+
+
+plot.dat <- meltMyTS(mv.ts.object = by.year.ts, time.var = "year", keep.vars = keep.vars)
+head(plot.dat)
+
+# Use ggMyTS to plot any of the variables or multiple variables together
+
+
+ggMyTS <- function(df, varlist, line = TRUE, point = TRUE, pointsize = 3, linewidth = 1.25, ...){
+  require(ggplot2)
+  # varlist = character vector with names of variables to use
+  if(missing(varlist)){
+    gg <- ggplot(df, aes(time, value, colour = variable)) 
+  }
+  else{
+    include <- with(df, variable %in% varlist)
+    gg <- ggplot(df[include,], aes(time, value, colour = variable))   
+  }
+  if(line == FALSE & point == FALSE) {
+    stop("At least one of 'line' or 'point' must be TRUE") 
+  }
+  else{
+    if(line == TRUE) gg <- gg + geom_line(size = linewidth, aes(color = variable), ...)
+    if(point == TRUE) gg <- gg + geom_point(size = pointsize, aes(color = variable), ...)
+  }
+  
+  gg + xlab("") + theme(legend.position = "bottom") + scale_x_continuous(breaks = min(df$time):max(df$time))
+}
+```
+
+## Key Xs
+
+I expect that the percentage of the population with bachelor's or higher will increase through the years because in modern society, people are getting more higher degrees. I expect percent of people who rate their life exciting to be increasing as well, because the world has become interesting, and, because it is possible that more people having higher degrees enables them to make time for an exciting life. I expect financial satisfaction to decrease or fluctuate, because comparing to external wealth has become worse as time has passed. I would normally expect happiness and health to increase, but from my previous work, I know they decrease. 
+
+Let's first look at the percentage of the population with bachelor's or higher:
+```{r}
+ggMyTS(df = plot.dat, varlist = c("ba_pct"))
+```
+
+Life satisfaction
+```{r}
+
+ggMyTS(df = plot.dat, varlist = c("exciting_life_pct"))
+
+```
+
+Financial satisfaction
+```{r}
+ggMyTS(df = plot.dat, varlist = c("sat_w_finances_pct"))
+```
+
+Happiness
+```{r}
+(g_happy_pct <- ggMyTS(df = plot.dat, varlist = c("happy_pct")))
+```
+
+
+Self-Rated Health
+```{r}
+ggMyTS(df = plot.dat, varlist = c("excellent_health_pct"))
+```
+
+Age Composition
+```{r}
+ggMyTS(df = plot.dat, varlist = c("over50_pct"))
+
+```
+
+As expected, the percentage of the population with bachelor's or higher increased through the years, as did percentage of people who rate their life as exciting. Financial satisfaction fluctuates. As stated before, health and happiness are decreasing. However, there are some cohort and age effects happening, and I will explore them further later. 
+
+## Q3: Simple time series regression
+3. Run a simple time series regression, with one X and no trend.  Interpret it.
+
+```{r}
+# simplest regression
+lm.exciting_life <- lm(exciting_life_pct ~ ba_pct, data = by.year.ts)
+summary(lm.exciting_life)
+```
+
+The positive, highly significant coefficient, and high R squared of 0.72, suggests a strong association between percentage of people with higher degrees and people finding their life exciting over time. This indicates that years with a higher proportion of educated individuals correspond to higher life excitement.
+
+```{r}
+# test for heteroskedasticity
+bptest(lm.exciting_life)
+```
+
+The BP is not significant, so there is no heteroskedasticity.
+
+```{r}
+# look for autocorrelation in errors
+e <- lm.exciting_life$resid
+acf(e) 
+plot(e) # plot residuals over time
+dwtest(lm.exciting_life) # Durbin-Watson test
+bgtest(lm.exciting_life) # Breusch-Godfrey test
+durbinWatsonTest(lm.exciting_life, max.lag=3) # Durbin-Watson with more lags
+
+
+```
+
+The tests strongly indicate positive serial correlation:
+
+The DW statistic of ~0.7255 with a very small p-value (~2.17e-07) is much less than 2, indicating strong positive autocorrelation in the residuals.
+The Breusch-Godfrey test also confirms serial correlation (p-value = 2.312e-05).
+The ACF plot of residuals shows a large spike at lag 1 and 2. 
+
+Hence, the errors from the regression model are not independent over time. This violates OLS assumptions so we must explore more methods.
+
+## Q4: TS regression with one X, trent, including autocorr diagnostics
+4. Run a time series regression with one X and trend.  Interpret it.  Perform autocorrelation diagnostics.  Explain what you found.
+
+```{r}
+# include year trend
+lm.exciting_life2 <- update(lm.exciting_life, ~ . + year)
+summary(lm.exciting_life2)
+```
+
+After controlling for a linear time trend, the relationship between ba_pct and exciting_life_pct is no longer statistically significant. This may indicate that the original relationship is partly spurious due to time trends. In addition, however, the time trend itself is not significant. 
+
+```{r}
+# look for autocorrelation
+e2 <- lm.exciting_life2$resid
+acf(e2, xlim = c(1,8), col = "red", lwd = 2)
+pacf(e2, xlim = c(1,8), col = "red", lwd = 2)
+plot(e2)
+
+
+coeftest(lm.exciting_life2, vcov = NeweyWest(lm.exciting_life2, lag = 1))
+
+dwtest(lm.exciting_life2)
+bgtest(lm.exciting_life2)
+durbinWatsonTest(lm.exciting_life2, max.lag=3)
+
+
+```
+
+The ACF plot shows strong positive autocorrelation at lag 1, which means the residuals are not independent over time (the residual at time 1 is correlated with the residual at t - 1). The PACF plot supports this. The residuals look random, but the other tests point to correlation.
+
+The DW statistic for the new model is about 0.719, with a very small p-value. This is almost the same outcome as the original model without the trend and still indicates strong positive serial correlation in the residuals. The BG test small p value also indicates serial correlation in the residuals. 
+
+## Q5: TS regression with many Xs and trend, including VIF
+5. Consider running a time series regression with many Xs and trend.  Interpret that.  Check VIF.
+
+```{r}
+
+# add some more predictors
+lm.exciting_life3 <- update(lm.exciting_life2, ~ . + age + happy_pct + sat_w_finances_pct)
+summary(lm.exciting_life3)
+vif(lm.exciting_life3) # variance inflation factor 
+durbinWatsonTest(lm.exciting_life3, max.lag=2)
+
+```
+
+No predictors are significant in the multivariate regression with trend. The R-squared remains around 0.73, similar to prior models, suggesting that adding these variables does not substantially improve the model’s explanatory power. Similarly with the RSE, it is similar, so predictive accuracy has not improved.
+
+ba_pct and year have very high VIFs (>> 10), suggesting high multicolinearity. The VIF for age is also high, indicating multicolinearity.
+
+Let's dry first differences as these models show they have issues.
+
+## Q6: First differenced TS regression
+6. Run a first differenced time series regression.  Interpret that.    
+
+```{r}
+
+
+firstD <- function(var, group, df){
+  bad <- (missing(group) & !missing(df))
+  if (bad) stop("if df is specified then group must also be specified")
+  
+  fD <- function(j){ c(NA, diff(j)) }
+  
+  var.is.alone <- missing(group) & missing(df)
+  
+  if (var.is.alone) {
+    return(fD(var))
+  }
+  if (missing(df)){
+    V <- var
+    G <- group
+  }
+  else{
+    V <- df[, deparse(substitute(var))]
+    G <- df[, deparse(substitute(group))]
+  }
+  
+  G <- list(G)
+  D.var <- by(V, G, fD)
+  unlist(D.var)
+}
+
+firstD <- function(var, group, df){
+  bad <- (missing(group) & !missing(df))
+  if (bad) stop("if df is specified then group must also be specified")
+  
+  fD <- function(j){ c(NA, diff(j)) }
+  
+  var.is.alone <- missing(group) & missing(df)
+  
+  if (var.is.alone) {
+    return(fD(var))
+  }
+  if (missing(df)){
+    V <- var
+    G <- group
+  }
+  else{
+    V <- df[, deparse(substitute(var))]
+    G <- df[, deparse(substitute(group))]
+  }
+  
+  G <- list(G)
+  D.var <- by(V, G, fD)
+  unlist(D.var)
+}
+
+## Use the first differences
+by.yearFD <- summarise(data.frame(by.year.ts),
+                       exciting_life_pct = firstD(exciting_life_pct), # using firstD functon from QMSS package
+                    #   age = firstD(age),
+                    #   ba_pct = firstD(ba_pct),
+                       boomer_pct = firstD(boomer_pct),
+                      excellent_health_pct = firstD(excellent_health_pct),
+                       happy_pct = firstD(happy_pct),
+                    #   income = firstD(income),
+                       year = year)
+
+lm.exciting_life4 <- update(lm.exciting_life2, data = by.yearFD)
+summary(lm.exciting_life4)
+e4 <- lm.exciting_life4$resid
+acf(e4, xlim = c(1,6), col = "red", lwd = 2)
+pacf(e4, xlim = c(1,6), col = "red", lwd = 2)
+
+
+# library(forecast)
+ auto.arima(e4, trace=TRUE)
+
+```
+
+The relationship between the percent of people with bachelors or higher and life excitement does not appear to be significant. After differencing, it appears that changes in exciting_life_pct are not strongly or significantly related to changes in ba_pct or to the passage of time (year), so the model does not provide evidence of a meaningful relationship in the differenced series. The dramatic drop in R-squared from 0.72 to 0.05 in the first-differenced model suggests that much of the relationship between education and life excitement was driven by common trends rather than an actual relationship. This either means there is no relationship or that we need to try another model. 
+
+
+## Q7: Check for unit roots
+7. Check your variables for unit roots.  Do some tests.  Interpret them.
+
+```{r}
+## 7. Check your variables for unit roots.  Do some tests.  Interpret them.
+
+adfTest(by.year.ts[,"exciting_life_pct"], lags = 0, type="ct")
+adfTest(by.year.ts[,"exciting_life_pct"], lags = 1, type="ct")
+adfTest(by.year.ts[,"exciting_life_pct"], lags = 2, type="ct")
+adfTest(by.year.ts[,"exciting_life_pct"], lags = 3, type="ct")
+adfTest(by.year.ts[,"exciting_life_pct"], lags = 4, type="ct")
+```
+
+ADF tests with 1, 2, and 3 lags showed significance, while ADF tests with 0 and 4 lags did not. This means that effects are present for lags of 1, 2, 3. This suggests that the relationship between education and life excitement may be more complex than a simple linear trend.
+
+
+```{r}
+# Phillips-Perron test
+PP.test(by.year.ts[,"exciting_life_pct"],lshort=TRUE)
+```
+
+The Phillips-Perron test fails to reject the null hypothesis of a unit root in the life excitement series. This result aligns with some of the ADF test specifications and suggests that the series may be non-stationary. This finding indicates that shocks to life excitement may have permanent effects, rather than reverting to the mean.
+
+```{r}
+# BTW, Solution 1: use Newey & West autocorrelation consistent covariance matrix
+# estimator
+
+library(sandwich)
+coeftest(lm.exciting_life3, vcov = NeweyWest(lm.exciting_life2, lag = 2))
+
+```
+
+
+## Q8: Automatic ARIMA on residuals
+8. Perform an Automatic ARIMA on the residuals from one of your earlier models.  Tell me what it says.
+
+```{r}
+library(forecast)
+auto.arima(e2, trace=TRUE)
+
+```
+
+Applying auto ARIMA to the residuals identified ARIMA(0,0,2) with zero mean as the optimal specification by mimimizing AIC. The model's two MA coefficients are statistically significant, which suggests that changes to to life excitement are still present for approximately 2 periods, but without any autoregressive components. The model's sigma^2 and log likelihood suggest reasonable fit. This is somewhat consistent with the ADF tests, though they suggested lags 1, 2, 3, and this just suggests lags 1, 2.
+
+
+## Q9: ARIMA
+9. Run an ARIMA that follows from Step 8.  Interpret that, too.
+
+```{r}
+## 9. Run an ARIMA that follows from Step 7.  Interpret that, too.
+
+xvars.fat <- by.year.ts[,c("ba_pct", "year")]
+
+arima.001 <- arima(by.year.ts[,"exciting_life_pct"], order = c(0,0,2), xreg = xvars.fat)
+summary(arima.001)
+
+Box.test(resid(arima.001), lag = 20, type = c("Ljung-Box"), fitdf = 0)
+```
+
+The coefficients for MA1, MA2, and ba_pct are positive with a relatively small standard error suggesting that fluctuations in exciting_life_pct are partly explained by changes in BA percentage (coefficient ba_pct) and are influenced by recent shocks at lags 1 and 2 (as captured by the MA terms). The year variable doesn’t show a trend after accounting for education and the moving average components, as the coefficient is small and the standard error is very large, even larger than the magnitude of the coefficient. The training set errors suggest a decent fit.
+
+The BL test suggests the residuals are essentially white noise (no detectable autocorrelation). This suggests that the MA(2) structure and the ba_pct have adequately captured the time-dependent patterns in the data, so this is a good model.
+
+Overall, this analysis shows a possible relationship between the percent of the population with a bachelors or higher and life excitement. It is not shown clearly in all models, but in the ARIMA, it shows that increases in the educated share of the population correlate positively with people’s reporting of having an exciting life, while time does not add much explanatory power. The model is statistically sound with no leftover autocorrelation, indicating an appropriate model specification for this particular data set. That being said, the first difference model and other forms showed no relationship, so care should be taken when interpreting this analysis. 
+
+Several factors could explain the patterns that are not a direct education-excitement relationship, such as omitted economic and social variables affecting both education and life satisfaction, generational differences in baseline education and life satisfaction, changes in how people interpret questions about life excitement over time, the possibility that excited/optimistic people pursue more education rather than vice versa, and there may have been changes in who has access to higher education over the study period. 
+
+All of the above implies that there may be a relationship, as some models suggest, but there may not. If there is a relationship, it is not overwhelmingly strong.
+
+> Box.test(resid(arima.001), lag = 20, type = c("Ljung-Box"), fitdf = 0)
+
+	Box-Ljung test
+
+data:  resid(arima.001)
+X-squared = 13.978, df = 20, p-value = 0.8316
+
+> summary(arima.001)
+
+Call:
+arima(x = by.year.ts[, "exciting_life_pct"], order = c(0, 0, 2), xreg = xvars.fat)
+
+Coefficients:
+         ma1     ma2  intercept  ba_pct     year
+      1.3544  0.5292    93.2761  0.4810  -0.0284
+s.e.  0.1916  0.1724   102.7286  0.1139   0.0526
+
+sigma^2 estimated as 0.6921:  log likelihood = -56.67,  aic = 125.34
+
+Training set error measures:
+                     ME      RMSE       MAE         MPE     MAPE      MASE        ACF1
+Training set 0.01274246 0.8319259 0.6257964 0.001845549 1.321035 0.6085466 -0.05052605lm

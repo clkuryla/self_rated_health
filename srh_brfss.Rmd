@@ -274,7 +274,19 @@ table(data_brfss_2004_2023$cohort)
 
 # Load BRFSS csv already modified and extracted 2011-2023
 
-data_brfss <- read_csv("big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv")
+data_brfss <- read_csv("big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv") 
+
+data_brfss <- data_brfss %>% 
+  mutate(health_cat = factor(health, 
+                        levels = 1:5,
+                        labels = c("Poor", "Fair", "Good", "Very Good", "Excellent")),
+         age_group = as.factor( 
+                            cut(
+                            age,
+                            breaks = c(17, 29, 39, 49, 59, 69, Inf),
+                            labels = c("18-29", "30-39", "40-49", "50-59", "60-69", "70+"),
+                            right = TRUE
+                          )))
 
 ```
 
@@ -282,6 +294,42 @@ data_brfss <- read_csv("big_data/BRFSS/brfss_data_2004_2023_recoded_min.csv")
 
 ```{r}
 
+
+data_brfss %>%
+  group_by(year) %>%
+  summarize(
+    mean_health = mean(health, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = year, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Year",
+    y = "Mean SRH",
+    subtitle = "BRFSS Dataset"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set2")
+
+data_brfss %>%
+  group_by(age) %>%
+  summarize(
+    mean_health = mean(health, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Age",
+    y = "Mean SRH",
+    subtitle = "BRFSS Dataset"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set2")
 
 data_brfss %>% 
   filter(age > 18, age < 90) %>% 
@@ -643,6 +691,35 @@ lm_generation_three <- lm(health ~ age + generation_three_sections, data = data_
 generation_age_interaction_figure(lm_generation_three, "Generation Three Sections")
 
 
+
+```
+
+# Categorical visualization
+
+```{r}
+
+data_brfss %>%
+  select(year, health_cat, age_group) %>%
+  mutate(srh = health_cat) %>% 
+#  filter(!is.na(health)) %>%
+#  mutate(
+#    srh = factor(health, 
+#                 levels = 1:4,
+#                 labels = c("Poor", "Fair", "Good", "Excellent"))) %>% 
+  # Remove missing values
+  # Calculate percentages by year
+  group_by(year, age_group) %>%
+  count(srh) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ungroup() %>% 
+  ggplot(aes(x = year, y = percent, color = srh)) +
+  geom_line() +
+  facet_wrap(~age_group) +
+  labs(title = "Self-Rated Health Category Distribution by Age Group",
+       subtitle = "BRFSS Dataset",
+       y = "Percent",
+       x = "Year") +
+  theme_minimal()
 
 ```
 

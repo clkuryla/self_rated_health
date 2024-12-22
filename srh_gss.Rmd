@@ -82,11 +82,19 @@ Here we'll load our data, clean some unwanted values, and recode the unintuitive
 ```{r load_and_clean_data}
 data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
   filter(cohort != 9999) %>% 
-  na.omit() %>% 
+#  na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
   mutate(happy = 4 - happy) %>% # same
   mutate(life = 4 - life) %>% # reverse again, these variables tend to be unintuitively ordered!!!
   mutate(satfin = 4 - satfin) # same again!
+
+
+data_gss <- data_gss %>% 
+  select(c("year" ,    "cohort"  , "age"   ,   "health"   ))  %>% 
+           na.omit()
+         
+         
+         #  "partyid"  "wtssps"   "wtssall"  "wtsscomp"))
 ```
 
 
@@ -103,7 +111,7 @@ In the following figure, I cut the age of participants into 6 groups and plotted
 data_gss %>% 
   mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
   group_by(age, year) %>% 
-  summarize(mean_health = mean(health)) %>% 
+  dplyr::summarize(mean_health = mean(health)) %>% 
   ggplot(aes(x = year, y = mean_health, color = age)) +
   geom_line() +
   geom_point() +
@@ -111,6 +119,19 @@ data_gss %>%
        subtitle = "GSS Dataset",
        x = "Year", 
        y = "Average SRH") 
+
+data_gss %>%
+    mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+    group_by(age, year) %>% 
+    dplyr::summarize(mean_health = mean(health, na.rm = TRUE), .groups = "drop") %>% 
+    ggplot(aes(x = year, y = mean_health, color = age)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Average SRH Per Year for Each Age Group",
+         subtitle = "GSS Dataset",
+         x = "Year", 
+         y = "Average SRH")
+
 ```
 
 This qualitative result is robust to the size of the categorical variables I split "age" into. 

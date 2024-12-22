@@ -1,0 +1,43 @@
+---
+title: "Panel GSS SRH"
+author: "Christine Lucille Kuryla"
+date: "2024-10-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(broom)
+```
+
+```{r}
+
+data_panel_gss <- read_csv("data/panel/panel-for-R.csv")
+
+data <- data_panel_gss %>% 
+  select(idnum, panelwave, age, cohort, year, health, happy) %>% 
+  filter(health %in% c(1, 2, 3, 4)) %>% 
+  mutate(health = 5 - health)
+
+```
+
+```{r}
+
+hist(data_panel_gss$health)
+
+data %>% 
+  filter(age > 18, age < 90) %>% 
+  mutate(age = cut(age, breaks = 8)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_health = mean(health)) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age)) +
+  geom_line() +
+  labs(title = "Panel",
+       subtitle = "GSS",
+       x = "Year", 
+       y = "Average SRH") +
+  geom_point() 
+
+```
+

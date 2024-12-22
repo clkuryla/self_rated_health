@@ -209,6 +209,18 @@ write_csv(data_ivs_usa, "data/ivs_usa_selected.csv")
 
 data_ivs_usa <- read_csv("data/ivs_usa_selected.csv")
 
+data_ivs_usa <- data_ivs_usa %>% 
+  mutate(health_cat = factor(health, 
+                        levels = 1:5,
+                        labels = c("Poor", "Fair", "Good", "Very Good", "Excellent")),
+         age_group = as.factor( 
+                            cut(
+                            age,
+                            breaks = c(17, 29, 39, 49, 59, 69, Inf),
+                            labels = c("18-29", "30-39", "40-49", "50-59", "60-69", "70+"),
+                            right = TRUE
+                          )))
+
 hist(data_ivs_usa$age)
 hist(data_ivs_usa$year)
 hist(data_ivs_usa$cohort)
@@ -224,6 +236,40 @@ hist(data_ivs_usa$happy)
 # IVS (WVS + EVS) Replicate GSS Analysis for New Data
 ```{r redo_gss_analysis_ivs}
 
+data_ivs_usa %>%
+  group_by(year) %>%
+  summarize(
+    mean_health = mean(health, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = year, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Year",
+    y = "Mean SRH",
+    subtitle = "IVS Dataset"
+  ) +
+  theme_minimal() 
+
+data_ivs_usa %>%
+  filter(age > 18) %>% 
+  group_by(age) %>%
+  summarize(
+    mean_health = mean(health, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Age",
+    y = "Mean SRH",
+    subtitle = "IVS Dataset"
+  ) +
+  theme_minimal() 
 
 data_ivs_usa %>% 
   filter(age > 18, age < 90) %>% 
@@ -819,6 +865,36 @@ lm_generation_three <- lm(health ~ age + generation_three_sections, data = data_
 generation_age_interaction_figure(lm_generation_three, "Generation Three Sections")
 
 
+
+```
+
+# Categorical visualization
+
+```{r}
+
+data_ivs_usa %>%
+  select(year, health_cat, age_group) %>%
+  na.omit() %>% 
+  mutate(srh = health_cat) %>% 
+#  filter(!is.na(health)) %>%
+#  mutate(
+#    srh = factor(health, 
+#                 levels = 1:4,
+#                 labels = c("Poor", "Fair", "Good", "Excellent"))) %>% 
+  # Remove missing values
+  # Calculate percentages by year
+  group_by(year, age_group) %>%
+  count(srh) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ungroup() %>% 
+  ggplot(aes(x = year, y = percent, color = srh)) +
+  geom_line() +
+  facet_wrap(~age_group) +
+  labs(title = "Self-Rated Health Category Distribution by Age Group",
+       subtitle = "IVS USA Dataset",
+       y = "Percent",
+       x = "Year") +
+  theme_minimal()
 
 ```
 
