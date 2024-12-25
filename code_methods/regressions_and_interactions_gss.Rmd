@@ -1,0 +1,244 @@
+---
+title: "Regressions"
+author: "Christine Lucille Kuryla"
+date: "2024-12-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Some interpretation guidance: https://chatgpt.com/share/676c4f33-a4b0-8002-adae-8f6368a9cf06 
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(broom)
+library(tidyr)
+
+regressions <- data_gss %>%
+  mutate(
+    period    = period_7yr,
+    cohort    = generation_10total,
+    age_group = age_group
+  ) %>%
+  group_by(age_group, period) %>%
+  nest() %>%
+  mutate(
+    model  = map(data, ~ lm(srh_num ~ age, data = .x)),
+    tidied = map(model, tidy)
+  ) %>%
+  unnest(cols = tidied) %>%
+  filter(term == "age") %>%
+  select(age_group, period, estimate, std.error, p.value)
+
+ regressions
+```
+
+
+
+```{r}
+
+
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = period, y = estimate, color = age_group)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(
+    aes(ymin = estimate - 1.96 * std.error,
+        ymax = estimate + 1.96 * std.error),
+    width = 0.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+
+ggplot(regressions, aes(x = period, y = estimate, fill = age_group)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  geom_errorbar(
+    aes(ymin = estimate - 1.96 * std.error,
+        ymax = estimate + 1.96 * std.error),
+    width = 0.2,
+    position = position_dodge(width = 0.8)
+  ) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    fill = "Age Group"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(regressions, aes(x = period, y = estimate, color = age_group)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = estimate - 1.96 * std.error,
+        ymax = estimate + 1.96 * std.error),
+    width = 0.2
+  ) +
+  facet_wrap(~ age_group) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)"
+  ) +
+  theme_minimal() +
+  
+```{r}
+
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = period, y = estimate, color = age_group, group = age_group)) +
+  geom_line() +
+  geom_point() +
+#  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+
+
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = period, y = estimate, color = age_group, group = age_group)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  facet_wrap(~ age_group) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  
+  
+  
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = age_group, y = estimate, color = period, group = period)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  facet_wrap(~ period) +
+  labs(
+    title = "Coefficient of Age on srh_num by Period and Age Group",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+```
+
+
+
+
+```
+
+```{r}
+
+ggplot(regressions, aes(x = period, y = age_group, fill = estimate)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(
+    midpoint = 0, 
+    low = "blue", mid = "white", high = "red",
+    name = "Est."
+  ) +
+  labs(
+    title = "Heatmap of Age Coefficients by Age Group and Period",
+    x = "Period",
+    y = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(panel.grid = element_blank())
+
+
+```
+
+```{r}
+
+ggplot(regressions %>% filter(age_group != "16-20"), aes(x = period, y = estimate)) +
+  geom_point() +
+  facet_wrap(~ age_group) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = period, y = estimate, color = age_group, group = age_group)) +
+  geom_line() +
+  geom_point() +
+#  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+
+
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = period, y = estimate, color = age_group, group = age_group)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  facet_wrap(~ age_group) +
+  labs(
+    title = "Coefficient of Age on srh_num by Age Group and Period",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  
+  
+  
+ggplot(regressions %>% filter(age_group != "16-20"),
+       aes(x = age_group, y = estimate, color = age_group, group = period)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  facet_wrap(~ period) +
+  labs(
+    title = "Coefficient of Age on srh_num by Period and Age Group",
+    x = "Period",
+    y = "Estimate (Coefficient for Age)",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+```
+

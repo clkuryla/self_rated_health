@@ -1,0 +1,129 @@
+---
+title: "SRH Hierarchical APC Methods: Mixed Effects (Frequentist)"
+author: "Christine Lucille Kuryla"
+date: "2024-12-22"
+output: 
+  html_document:
+    self_contained: true
+    toc: true
+knit_root_dir: "docs"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(broom)
+library(Hmisc)
+library(tidyverse)
+
+```
+
+# Heirarchical Models - Mixed Effects
+
+APC heirarchical models can use frequentist or Bayesian approaches. We will begin with mixed-effects models (frequentist).
+
+# Overview of Age-Period-Cohort (APC) Analysis
+
+### *The Basic APC Problem*
+- Age effect: Reflects how outcomes vary as individuals grow older (e.g., SRH typically declines with age).
+
+- Period effect: Captures influences that affect all individuals living in a specific time period (e.g., economic recessions, pandemics, policy changes).
+
+- Cohort effect: Reflects variations between birth cohorts whose members are exposed to unique sets of social, economic, or environmental conditions as they come of age (e.g., those born during WWII versus Baby Boomers versus Millennials).
+
+
+The classic methodological challenge is that 
+
+Age = Period − Cohort
+
+Because age, period, and cohort are perfectly linearly dependent, we cannot estimate all three as purely fixed and independent effects without additional constraints or assumptions.
+
+*The Rationale for Hierarchical APC Models*
+Hierarchical (or multilevel) APC models help address this identification problem by introducing random effects (also called random intercepts or random slopes) for periods and/or cohorts (and sometimes for age groups). Rather than forcing strict linear constraints or imposing a single (often arbitrary) identification choice, hierarchical APC models allow partial pooling and shrinkage of period and cohort estimates, increasing interpretability and stability:
+
+Partial pooling means that estimates for each period or cohort borrow information from all others, reducing the risk of extreme or unstable estimates—especially in sparse or unbalanced data.
+By specifying a random effect for period and/or cohort, you effectively treat periods/cohorts as samples from a larger population distribution, adding statistical “regularization.”
+Thus, hierarchical APC models are particularly useful when:
+
+- You have repeated cross-sectional or panel/longitudinal data over multiple periods.
+- You expect some correlation or partial overlap among time units (e.g., adjacent periods, similar cohorts).
+- You want estimates of period and cohort influences that do not rely on an arbitrary constraint (like forcing the effect of one period or cohort to be zero).
+- You aim to account for unbalanced designs (varying sample sizes across time points, missing years, etc.) without imposing rigid assumptions.
+
+
+## Structure of a Hierarchical APC Model
+
+Below is a simplified schematic of how you might specify a hierarchical APC model for SRH. Let iii index individuals, ppp index periods (years), and ccc index birth cohorts. (Age typically enters as a fixed effect or a set of spline terms, because it is the most straightforward to parameterize directly.)
+
+*Level-1 Model (Individual-Level):*
+
+\[
+SRH^*_{i,p,c} = \beta_0 + \beta_1(\text{Age}_{i,p,c}) + \beta_2(\mathbf{X}_{i,p,c}) + u_p + v_c + \epsilon_{i,p,c}
+\]
+
+where \(SRH^*_{i,p,c}\) could be (for instance) the latent scale of a logit or ordered logit model.
+
+*Level-2 Model (Random Effects):*
+
+\[
+u_p \sim N(0, \sigma^2_p), \quad
+v_c \sim N(0, \sigma^2_c), \quad
+\epsilon_{i,p,c} \sim N(0, \sigma^2_\epsilon)
+\]
+
+*Definitions:*
+- \(\beta_1(\text{Age})\): Fixed effect (or nonlinear spline) for age.
+- \(\mathbf{X}_{i,p,c}\): Other individual-level covariates (e.g., gender, race, education, biomarkers).
+- \(u_p\): Random intercept for period \(p\), capturing the global period-specific effect across all individuals in that period.
+- \(v_c\): Random intercept for cohort \(c\), capturing the global cohort-specific effect.
+- \(\epsilon_{i,p,c}\): Individual-level error term.
+
+
+This form (1) partially “resolves” the linear dependency among Age, Period, and Cohort by not treating period and cohort purely as separate fixed effects, (2) shrinks estimates of upu_pup​ and vcv_cvc​ toward zero, yielding more stable estimates than naive fixed-effects APC models.
+
+### Interpreting Hierarchical APC Models
+
+1. Fixed Effects (e.g., Age, Other Covariates)
+
+A significant negative coefficient for Age might imply that older individuals have lower SRH scores, all else being equal.
+Over time, you might see that these age slopes diminish or flatten, which could align with your preliminary observation that age has become a weaker predictor of SRH.
+
+2. Random Period Effects (\(u_p\))
+
+* You can interpret \(u_p\) as the (shrunk) deviation of period p’s overall health level from the grand mean, net of age and cohort.
+* Positive \(u_p\) would imply that, after adjusting for age and cohort differences, the period in question had higher-than-expected SRH.
+
+3. Random Cohort Effects (\(v_c\))
+
+Similarly, \(v_c\) captures the unique imprint of being born in cohort c.
+
+Negative values would indicate that a particular cohort experiences consistently worse SRH, beyond what would be explained by differences in age or period contexts they live in.
+
+4. Variance Components \((\sigma^2_p, \sigma^2_c)\)
+
+Indicate how much overall variability in SRH is explained by periods vs. cohorts.
+Larger variance for cohorts might suggest strong generational divides in health outcomes; larger variance for periods indicates strong temporal shocks or influences.
+
+5. Predicted Probabilities (or Means)
+
+For binary or ordered SRH outcomes, you can back-transform the linear predictor (e.g., via the logistic function) to interpret predicted probabilities for specific ages, cohorts, or periods.
+
+### Applying Hierarchical APC Models to SRH Project
+Alignment with Your Preliminary Observations
+Shifts in the Age-SRH Relationship
+
+A hierarchical APC model can directly test whether the age slope \((\beta_1)\) changes across periods or cohorts. You can also allow for random slopes by period or cohort if you suspect that the relationship between age and SRH varies across contexts.
+Diminishing Importance of Age Over Time
+
+The decreasing magnitude of the age coefficient in your standard regression analyses might be re-examined by fitting an interaction between Age 
+×
+× Period or Age 
+×
+× Cohort. In a hierarchical framework, you could allow random slopes for age across cohorts, for instance, testing if more recent cohorts “age differently.”
+Peak SRH in 1940s Cohorts, Decline in More Recent Generations
+
+Let the random cohort effects model how each cohort deviates from the overall mean. You’ll likely see positive random intercepts for the 1940s cohorts and negative for the more recent ones—confirming your observation with appropriate shrinkage (reducing the chance that small sample sizes in certain cohorts lead to large spurious effects).
+Consistency Across GSS, BRFSS, NHANES, IVS
+
+One advantage of hierarchical models is that you can pool data across surveys if the designs are compatible. You can also estimate cross-classified random effects (e.g., random intercepts for dataset-by-period or dataset-by-cohort) to capture systematic differences in how SRH is measured across surveys.

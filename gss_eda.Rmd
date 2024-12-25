@@ -3,14 +3,17 @@ title: "Initial GSS EDA and APC - health and covariates"
 author: "Christine Lucille Kuryla"
 date: "2024-09-27"
 output: 
-  github_document:
+  html_document:
+    self_contained: true
     toc: true
+knit_root_dir: "docs"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(gridExtra)
+library(here)
 ```
 
 Take a look at GSS dataset, what's available, some trends, etc. 
@@ -51,7 +54,7 @@ data_gss <- as.data.frame(gss_all) %>%
          "satfin"    # 1 pretty well satisfied, 2 more or less satisfied, 3 not satisfied at all
          )
 
-write_csv(data_gss, "data/extracted_gss_variables.csv")
+write_csv(data_gss, here("data/extracted_gss_variables.csv"))
 
 ```
 
@@ -232,7 +235,7 @@ I'm going to show you a seven-point scale on which the political views that peop
 Here we'll load our data, clean some unwanted values, and recode the unintuitive variables.
 
 ```{r load_and_clean_data}
-data_gss <- read_csv("data/extracted_gss_variables.csv") %>% 
+data_gss <- read_csv(here("data/extracted_gss_variables.csv")) %>% 
   filter(cohort != 9999) %>% 
   na.omit() %>% 
   mutate(health = 5 - health)  %>%  # reverse the coding so it's more intuitive (higher number for excellent, lower number for poor)
