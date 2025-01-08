@@ -1,0 +1,433 @@
+---
+title: "NHANES Survival Analysis -- Checking NHANES Weights First"
+author: "Christine Lucille Kuryla"
+date: "2025-01-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+
+```
+
+# Load and Wrangle Data
+
+```{r}
+
+# Load and wrangle nhanes data 
+
+data_nh <- read_csv(here("code_examples/kamaryn_nhanes/nhanes_1999-2018_2023-11-29.csv"))
+
+dim(data_nh)
+sum(is.na(data_nh$health)) # note there are 38579 NA's for health out of 96241 subj
+
+year_to_wave <- read_csv(here("big_data/NHANES/nhanes_4/nh4_year_to_wave.csv")) %>% 
+  mutate(release_nb = wave) 
+
+data_nhanes <- data_nh %>% 
+  filter(visit == 1) %>% 
+  filter(age_visit >= 18) %>% 
+  filter(!(is.na(health))) %>% # remove subjects without our primary variable of interest
+ # left_join(year_to_wave, by = "release_nb") %>% # year of survey (***note each survey is two years, this is aproximate and just the first year)
+  mutate(srh = 6 - health) %>%  # recode SRH to be more intuitive (Excellent = 5 to Poor = 1)
+  mutate(age = age_visit) # more intuitive naming for APC analyses
+
+# variables of interest: 
+# self-rated health: "health" originally, reverse recoded to "srh"
+# age at survey: "age_visit"
+# age at follow-up (censored/deceased): "age_last"
+# vital status at follow-up (alive/decesased): "deceased"
+# year/wave: "release_nb"
+# SEQN: "BaseID"
+# "ddem_wghts"	Full Sample 2 Year MEC Exam Weight	WTMEC2YR
+# "dem_wghts_4yr"	Full Sample 4 Year MEC Exam Weight	WTMEC4YR
+
+
+# Adding gloria's for weight variable: SDDSRVYR and other clock and APC things if needed 
+
+data_nhanes_gloria <- read.csv(here("big_data/NHANES/Gloria_preprocessed/Data-3/Core_Dataset_Aim2.csv"))
+
+data_nhanes <- data_nhanes %>% 
+  mutate(SEQN = as.character(BaseID)) %>% 
+  left_join(data_nhanes_gloria %>% 
+              rename(race_decoded = race) %>% 
+              mutate(age = as.numeric(age)), 
+            by = c("SEQN", "age")) %>% 
+  mutate(age = as.numeric(age))
+
+# add more
+
+data_nhanes <- data_nhanes %>% 
+  mutate(age_group = as.factor( 
+                            cut(
+                            age,
+                            breaks = c(17, 29, 39, 49, 59, 69, Inf),
+                            labels = c("18-29", "30-39", "40-49", "50-59", "60-69", "70+"),
+                            levels = c("18-29", "30-39", "40-49", "50-59", "60-69", "70+"),
+                            right = TRUE
+                          )),
+         health_cat = factor(srh, 
+                        levels = 1:5,
+                        labels = c("Poor", "Fair", "Good", "Very Good", "Excellent")))
+
+
+```
+
+# Original SRH analysis
+
+## Unweighted
+
+```{r}
+
+# unweighted
+
+
+data_nhanes %>%
+  group_by(year) %>%
+  summarize(
+    mean_srh = mean(srh, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = year, y = mean_srh)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Year",
+    y = "Mean SRH",
+    subtitle = "nhanes Dataset"
+  ) +
+  theme_minimal() #+
+#  scale_color_brewer(palette = "Set2")
+
+data_nhanes %>%
+  group_by(age) %>%
+  summarize(
+    mean_srh = mean(srh, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = age, y = mean_srh)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Age",
+    y = "Mean SRH",
+    subtitle = "nhanes Dataset"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set2")
+
+data_nhanes %>% 
+  filter(age > 18, age < 90) %>% 
+  mutate(age = cut(age, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, year) %>% 
+  summarize(mean_srh = mean(srh)) %>% 
+  ggplot(aes(x = year, y = mean_srh, color = age)) +
+  geom_line() +
+  labs(title = "Average SRH Per Year for Each Age Group",
+       subtitle = "nhanes 2004 - 2023 Dataset",
+       y = "Average SRH", 
+       x = "Year",
+       color = "Age Group") +
+  theme_minimal() +
+  geom_point() 
+
+
+# srh vs age per year
+data_nhanes %>% 
+  group_by(age, year) %>% 
+  summarize(mean_srh = mean(srh)) %>% 
+  ggplot(aes(x = age, y = mean_srh)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "nhanes 2004 - 2023 Dataset",
+       y = "Average SRH", 
+       x = "Age of Respondent")
+
+
+# Aggregate slopes
+
+# years_of_gss <- c(data_gss %>% select(year) %>% unique() )
+# lm_health_v_age_0 <- data_gss %>%
+#   group_by(year) %>%
+#   summarize(coef = coef(lm(srh ~ age, data = cur_data()))["age"])
+
+# Perform linear regression for each year and extract the coefficient of 'age' with confidence intervals, se, t stat, p val
+lm_srh_v_age_0 <- data_nhanes %>%
+  group_by(year) %>%
+  do(broom::tidy(lm(srh ~ age, data = .), conf.int = TRUE)) %>%  # Add conf.int = TRUE for CIs
+  filter(term == "age") %>%
+  select(year, coef = estimate, conf.low, conf.high, se = std.error, t_statistic = statistic,  p_value = p.value)
+
+# View the results with confidence intervals, se, t statistic, and p value
+# print(lm_srh_v_age_0)
+knitr::kable(lm_srh_v_age_0,
+             caption = "nhanes 2004 - 2023 Dataset")
+
+# Plot coefficients
+ggplot(lm_srh_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+  labs(
+    title = "Change in 'Age' Coefficient Over Years",
+    subtitle = "nhanes 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Plot coefficients with CI
+ggplot(lm_srh_v_age_0, aes(x = year, y = coef)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Add shaded area for confidence intervals
+  labs(
+    title = "Change in 'Age' Coefficient Over Years with Confidence Intervals",
+    subtitle = "nhanes 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(coef ~ year, data = lm_srh_v_age_0)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+ggplot(lm_srh_v_age_0, aes(x = year, y = coef)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                 position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +  # Adds the regression line with standard error shading
+#  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +  # Confidence intervals for the coefficients
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "nhanes 2004 - 2023 Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+data_nhanes %>% 
+  filter(cohort > 1800, cohort < 2020) %>% 
+  mutate(cohort = cut(cohort, breaks = 6)) %>% # Create cohorts with 6 breaks
+  group_by(age, cohort) %>% 
+  summarize(mean_srh = mean(srh)) %>% 
+  ggplot(aes(x = age, y = mean_srh, color = cohort)) +
+  labs(title = "Age Profiles by Cohort", 
+       subtitle = "nhanes 2004 - 2023 Dataset") +
+  geom_line()
+
+
+
+
+```
+
+## With weighting
+
+```{r}
+
+library(survey)
+library(srvyr)
+
+svy_nhanes <- data_nhanes %>%
+  filter(!(is.na(SDMVPSU))) %>% 
+  as_survey_design(
+  #  ids = 1,
+    ids = SDMVPSU,           # PSU identifiers (use 1 if not available)
+  #  weights = WTINT2YR,  # original -- interview weights -- larger sample size but fewer covariates
+    weights = WTMEC2YR, # Gloria's -- enable more covariates
+    strata = SDMVSTRA,
+    nest = TRUE
+    )
+
+```
+
+```{r}
+
+
+svy_nhanes %>%
+  mutate(srh = as.numeric(srh)) %>% 
+  group_by(year) %>%
+  summarize(
+    mean_health = survey_mean(srh, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = year, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Year",
+    y = "Mean SRH",
+    subtitle = "NHANES Dataset"
+  ) +
+  theme_minimal() 
+
+svy_nhanes %>%
+  filter(age >= 18) %>% 
+  mutate(srh = as.numeric(srh)) %>% 
+  group_by(age) %>%
+  summarize(
+    mean_health = survey_mean(srh, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(size = 1, color = "cornflowerblue") +
+  geom_point(size = 2, color = "darkblue") +
+  labs(
+    title = "Self-Rated Health",
+    x = "Age",
+    y = "Mean SRH",
+    subtitle = "NHANES Dataset"
+  ) +
+  theme_minimal() 
+
+svy_nhanes %>%
+  #mutate(age_group = cut(age, breaks = 6)) %>% 
+  group_by(age_group, year) %>%
+  summarise(
+    mean_health = survey_mean(srh, na.rm = TRUE)
+  ) %>% 
+  ggplot(aes(x = year, y = mean_health, color = age_group)) +
+  #  geom_smooth(alpha = 0.2) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Average SRH Per Year for Each Age Group",
+    subtitle = "NHANES IV",
+    x = "Year",
+    y = "Average Self-Rated Health",
+    color = "Age Group"
+  ) +
+  theme_minimal()
+
+
+```
+
+# Relationship of self-rated health to age, separated out by years
+
+```{r}
+
+svy_nhanes %>% 
+  group_by(age, year) %>% 
+  summarize(mean_health = survey_mean(srh)) %>% 
+  ggplot(aes(x = age, y = mean_health)) +
+  geom_line(color = "cornflowerblue") +
+  facet_wrap(~ year) +
+  labs(title = "Self-Rated Health By Age (Per Year)",
+       subtitle = "NHANES IV Dataset",
+       x = "Age of Respondent", 
+       y = "Average SRH",
+       )
+
+## Regress self-rated health on age, for each year
+
+# Let's do a regression on each self-rated-health vs age, subsetted for each year (the plots on the faceted figure), look at the significance, and plot the coefficients for age with 95% CIs:
+
+library(broom)
+
+# Perform weighted regression for each year
+weighted_lm_by_year <- svy_nhanes %>%
+  group_by(year) %>%
+  group_map_dfr(~ {
+    model <- survey::svyglm(srh ~ age, design = .x)
+    tidy(model, conf.int = TRUE)
+  }) %>%
+  filter(term == "age") %>%
+  select(year, estimate, std.error, conf.low, conf.high, statistic, p.value)
+
+knitr::kable(weighted_lm_by_year)
+
+
+
+## Regress the coefficients over years
+
+# Visualize
+ggplot(weighted_lm_by_year, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.2,
+                position=position_dodge(0.05)) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +
+  labs(
+    title = "Regression of 'Age' Coefficient Over Years",
+    subtitle = "NHANES IV Dataset",
+    x = "Year",
+    y = "Coefficient of Age"
+  ) +
+  theme_minimal()
+
+# Perform linear regression of 'coef' (age coefficient) vs 'year'
+lm_coef_vs_year <- lm(estimate ~ year, data = weighted_lm_by_year)
+
+# View the summary of the regression
+summary(lm_coef_vs_year)
+
+```
+
+
+# Survival Analysis (Without Weights)
+
+```{r}
+
+coxph_all_unweighted <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, data=data_nhanes)
+coxph_all_unweighted
+coxph_all_unweighted$coefficients[1]
+
+table(data_nhanes$year)
+
+coxph_unweighted_2001 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2001))
+coxph_unweighted_2003 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2003))
+coxph_unweighted_2005 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2005))
+coxph_unweighted_2007 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2007))
+coxph_unweighted_2009 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2009))
+coxph_unweighted_2011 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2011))
+coxph_unweighted_2013 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2013))
+coxph_unweighted_2015 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2015))
+coxph_unweighted_2017 <- coxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, 
+      data= data_nhanes %>% filter(year == 2017))
+
+coxph_unweighted_2001
+coxph_unweighted_2003
+coxph_unweighted_2005
+coxph_unweighted_2007
+coxph_unweighted_2009
+coxph_unweighted_2011
+coxph_unweighted_2013
+coxph_unweighted_2015
+coxph_unweighted_2017
+
+coef_over_time <- c(coxph_unweighted_2001$coefficients,
+coxph_unweighted_2003$coefficients,
+coxph_unweighted_2005$coefficients,
+coxph_unweighted_2007$coefficients,
+coxph_unweighted_2009$coefficients,
+coxph_unweighted_2011$coefficients,
+coxph_unweighted_2013$coefficients,
+coxph_unweighted_2015$coefficients,
+coxph_unweighted_2017$coefficients)
+
+coef_over_time
+
+# They do increase
+
+```
+
+
