@@ -13,6 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(here)
 library(survival)
+library(broom)
+library(survey)
+library(srvyr)
 ```
 
 # Load and Wrangle Data
@@ -552,6 +555,345 @@ data_nhanes %>%
       Surv(time = age_visit, time2 = age_last, event = deceased) ~ srh, 
       data = .x
     )
+    # 4. Extract the coefficient for srh
+    # Get a summary of the model
+    cox_summary <- summary(cox_model)
+    
+    # 4. Extract key metrics from the summary
+    #    The 'coefficients' matrix in cox_summary has columns: 
+    #    coef, exp(coef), se(coef), z, Pr(>|z|)
+    #    The 'conf.int' matrix has columns: exp(coef), exp(-coef), lower .95, upper .95
+    tibble(
+      coefficient_srh   = cox_summary$coefficients[1, "coef"],
+      se_srh            = cox_summary$coefficients[1, "se(coef)"],
+      z_value_srh       = cox_summary$coefficients[1, "z"],
+      p_value_srh       = cox_summary$coefficients[1, "Pr(>|z|)"],
+      hr_srh            = cox_summary$conf.int[1, "exp(coef)"],    # Hazard Ratio
+      hr_lower_95_srh   = cox_summary$conf.int[1, "lower .95"],    # 95% CI lower bound
+      hr_upper_95_srh   = cox_summary$conf.int[1, "upper .95"]     # 95% CI upper bound
+    )
+  }) %>%
+  # 5. Ungroup to finish
+  ungroup() %>% 
+  filter(coefficient_srh < 5) %>% 
+  ggplot(aes(x = year, y = coefficient_srh)) +
+  facet_wrap(~generation_two_sections) +
+  geom_line()
+
+```
+
+# Survival Analysis (with weights)
+
+```{r}
+
+
+svy_nhanes <- data_nhanes %>%
+  filter(!(is.na(SDMVPSU))) %>% 
+  as_survey_design(
+  #  ids = 1,
+    ids = SDMVPSU,           # PSU identifiers (use 1 if not available)
+  #  weights = WTINT2YR,  # original -- interview weights -- larger sample size but fewer covariates
+    weights = WTMEC2YR, # Gloria's -- enable more covariates
+    strata = SDMVSTRA,
+    nest = TRUE
+    )
+
+
+```
+
+# All together
+```{r}
+
+coxph_all_weighted <- svycoxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, design = svy_nhanes)
+
+coxph_all_weighted
+
+```
+
+
+# By Year
+
+```{r}
+# Fit the Cox PH model within each year-group and extract the coefficient
+coef_over_time <- svy_nhanes %>%
+  group_by(year) %>%
+  # Use group_modify to apply a function that fits a coxph model 
+  #    to each year's subset of the data
+  group_map_dfr(~ {
+    # Fit the Cox model
+    cox_model <- svycoxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, design = .)
+      
+      
+  #    coxph(
+  #    Surv(time = age_visit, time2 = age_last, event = deceased) ~ srh, 
+      data = .x
+  #  )
+      
+    # 4. Extract the coefficient for srh
+    # Get a summary of the model
+    cox_summary <- summary(cox_model)
+    
+    # 4. Extract key metrics from the summary
+    #    The 'coefficients' matrix in cox_summary has columns: 
+    #    coef, exp(coef), se(coef), z, Pr(>|z|)
+    #    The 'conf.int' matrix has columns: exp(coef), exp(-coef), lower .95, upper .95
+    tibble(
+      coefficient_srh   = cox_summary$coefficients[1, "coef"],
+      se_srh            = cox_summary$coefficients[1, "se(coef)"],
+      z_value_srh       = cox_summary$coefficients[1, "z"],
+      p_value_srh       = cox_summary$coefficients[1, "Pr(>|z|)"],
+      hr_srh            = cox_summary$conf.int[1, "exp(coef)"],    # Hazard Ratio
+      hr_lower_95_srh   = cox_summary$conf.int[1, "lower .95"],    # 95% CI lower bound
+      hr_upper_95_srh   = cox_summary$conf.int[1, "upper .95"]     # 95% CI upper bound
+    )
+  }) %>%
+  # 5. Ungroup to finish
+  ungroup()
+
+coef_over_time
+
+coef_over_time %>% 
+  ggplot(aes(x = year, y = coefficient_srh)) + 
+  geom_point() +
+  geom_line() +
+  theme_minimal()
+
+coef_over_time %>%
+  filter(!(is.na(year))) %>% 
+  ggplot(aes(x = factor(year), 
+             y = coefficient_srh, 
+             ymin = coefficient_srh - 1.96 * se_srh, 
+             ymax = coefficient_srh + 1.96 * se_srh)) +
+  
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Survey Year",
+    y = "Log Hazard Ratio (Coefficient ± 1.96*SE)",
+    title = "Coefficient for SRH Across Years"
+  ) +
+  theme_minimal()
+
+
+# Forest plot
+
+# 1. Forest-plot style for HRs
+coef_over_time %>%
+  filter(!(is.na(year))) %>% 
+  ggplot(aes(x = factor(year), 
+             y = hr_srh, 
+             ymin = hr_lower_95_srh, 
+             ymax = hr_upper_95_srh)) +
+  
+  # Point + error bars
+  geom_pointrange() +
+  
+  # Horizontal reference line at HR=1.0
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  
+  # Axis labels, theme
+  labs(
+    x = "Survey Year",
+    y = "Hazard Ratio (HR) [95% CI]",
+    title = "Hazard Ratios for SRH Across Years"
+  ) +
+  coord_flip() +  # flip coordinates if you prefer a vertical forest plot
+  theme_minimal()
+
+
+# p-value plot
+coef_over_time %>%
+  filter(!(is.na(year))) %>% 
+  ggplot(aes(x = factor(year), 
+             y = -log10(p_value_srh))) +  # transform p-values for better scale
+  geom_col() + 
+  geom_hline(yintercept = -log10(0.05), 
+             linetype = "dashed", 
+             color = "red") +
+  labs(
+    x = "Survey Year",
+    y = expression(-log[10](p)),
+    title = "P-value for SRH Across Years"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+## By Year and Age Group
+
+```{r}
+# Fit the Cox PH model within each year-group and extract the coefficient
+coef_over_time <- svy_nhanes %>%
+  group_by(year, age_group) %>%
+  # Use group_modify to apply a function that fits a coxph model 
+  #    to each year's subset of the data
+  group_map_dfr(~ {
+    # Fit the Cox model
+    cox_model <- svycoxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, design = .)
+      
+      
+  #    coxph(
+  #    Surv(time = age_visit, time2 = age_last, event = deceased) ~ srh, 
+      data = .x
+  #  )
+      
+    # 4. Extract the coefficient for srh
+    # Get a summary of the model
+    cox_summary <- summary(cox_model)
+    
+    # 4. Extract key metrics from the summary
+    #    The 'coefficients' matrix in cox_summary has columns: 
+    #    coef, exp(coef), se(coef), z, Pr(>|z|)
+    #    The 'conf.int' matrix has columns: exp(coef), exp(-coef), lower .95, upper .95
+    tibble(
+      coefficient_srh   = cox_summary$coefficients[1, "coef"],
+      se_srh            = cox_summary$coefficients[1, "se(coef)"],
+      z_value_srh       = cox_summary$coefficients[1, "z"],
+      p_value_srh       = cox_summary$coefficients[1, "Pr(>|z|)"],
+      hr_srh            = cox_summary$conf.int[1, "exp(coef)"],    # Hazard Ratio
+      hr_lower_95_srh   = cox_summary$conf.int[1, "lower .95"],    # 95% CI lower bound
+      hr_upper_95_srh   = cox_summary$conf.int[1, "upper .95"]     # 95% CI upper bound
+    )
+  }) %>%
+  # 5. Ungroup to finish
+  ungroup()
+
+coef_over_time
+
+coef_over_time %>% 
+  ggplot(aes(x = year, y = coefficient_srh, color = age_group)) + 
+  geom_point() +
+  geom_line() +
+  theme_minimal()
+```
+
+## By cohort
+```{r}
+# By generation
+
+coef_over_cohort <- svy_nhanes %>%
+    filter(!(is.na(generation_two_sections))) %>% 
+  filter(generation_two_sections != "Gen Z Early (1997-2004)") %>% 
+  group_by(generation_two_sections) %>%
+  # Use group_modify to apply a function that fits a coxph model 
+  #    to each year's subset of the data
+  group_map_dfr(~ {
+    # Fit the Cox model
+    cox_model <- svycoxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, design = .)
+      
+      
+  #    coxph(
+  #    Surv(time = age_visit, time2 = age_last, event = deceased) ~ srh, 
+  #    data = .x
+  #  )
+    # 4. Extract the coefficient for srh
+    # Get a summary of the model
+    cox_summary <- summary(cox_model)
+    
+    # 4. Extract key metrics from the summary
+    #    The 'coefficients' matrix in cox_summary has columns: 
+    #    coef, exp(coef), se(coef), z, Pr(>|z|)
+    #    The 'conf.int' matrix has columns: exp(coef), exp(-coef), lower .95, upper .95
+    tibble(
+      coefficient_srh   = cox_summary$coefficients[1, "coef"],
+      se_srh            = cox_summary$coefficients[1, "se(coef)"],
+      z_value_srh       = cox_summary$coefficients[1, "z"],
+      p_value_srh       = cox_summary$coefficients[1, "Pr(>|z|)"],
+      hr_srh            = cox_summary$conf.int[1, "exp(coef)"],    # Hazard Ratio
+      hr_lower_95_srh   = cox_summary$conf.int[1, "lower .95"],    # 95% CI lower bound
+      hr_upper_95_srh   = cox_summary$conf.int[1, "upper .95"]     # 95% CI upper bound
+    )
+  }) %>%
+  # 5. Ungroup to finish
+  ungroup()
+
+coef_over_cohort
+
+coef_over_cohort %>% 
+  ggplot(aes(x = generation_two_sections, y = coefficient_srh)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+
+coef_over_cohort %>%
+  filter(!(is.na(generation_two_sections))) %>% 
+  filter(generation_two_sections != "Gen Z Early (1997-2004)") %>% 
+  ggplot(aes(x = factor(generation_two_sections), 
+             y = coefficient_srh, 
+             ymin = coefficient_srh - 1.96 * se_srh, 
+             ymax = coefficient_srh + 1.96 * se_srh)) +
+  
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Cohort",
+    y = "Log Hazard Ratio (Coefficient ± 1.96*SE)",
+    title = "Coefficient for SRH for Diffrerent Generations"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+# Forest plot
+
+# 1. Forest-plot style for HRs
+coef_over_cohort %>%
+  filter(!(is.na(generation_two_sections))) %>% 
+  filter(generation_two_sections != "Gen Z Early (1997-2004)") %>% 
+  ggplot(aes(x = factor(generation_two_sections), 
+             y = hr_srh, 
+             ymin = hr_lower_95_srh, 
+             ymax = hr_upper_95_srh)) +
+  
+  # Point + error bars
+  geom_pointrange() +
+  
+  # Horizontal reference line at HR=1.0
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  
+  # Axis labels, theme
+  labs(
+    x = "Generation",
+    y = "Hazard Ratio (HR) [95% CI]",
+    title = "Hazard Ratios for SRH Across Cohorts"
+  ) +
+  coord_flip() +  # flip coordinates if you prefer a vertical forest plot
+  theme_minimal()
+
+# p-value plot
+coef_over_cohort %>%
+  filter(!(is.na(generation_two_sections))) %>% 
+  filter(generation_two_sections != "Gen Z Early (1997-2004)") %>% 
+  ggplot(aes(x = factor(generation_two_sections), 
+             y = -log10(p_value_srh))) +  # transform p-values for better scale
+  geom_col() + 
+  geom_hline(yintercept = -log10(0.05), 
+             linetype = "dashed", 
+             color = "red") +
+  labs(
+    x = "Survey Year",
+    y = expression(-log[10](p)),
+    title = "P-value for SRH Across Cohorts"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+
+```
+
+## Year and cohort
+```{r, eval = FALSE}
+svy_nhanes %>%
+  filter(!(is.na(generation_two_sections))) %>% 
+  filter(generation_two_sections != "Gen Z Early (1997-2004)") %>% 
+  group_by(year, generation_two_sections) %>%
+  # Use group_modify to apply a function that fits a coxph model 
+  #    to each year's subset of the data
+  group_map_dfr(~ {
+    # Fit the Cox model
+    cox_model <- svycoxph(Surv(time=age_visit, time2=age_last, event=deceased)~srh, design = .)
+   
     # 4. Extract the coefficient for srh
     # Get a summary of the model
     cox_summary <- summary(cox_model)
