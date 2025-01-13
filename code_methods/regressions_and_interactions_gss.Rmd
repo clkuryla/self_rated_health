@@ -450,7 +450,6 @@ ggplot(regressions, aes(x = period, y = estimate, color = age_group)) +
 ```
 
 ```{r}
-
 ggplot(regressions %>% filter(age_group != "16-20"),
        aes(x = period, y = estimate, color = age_group, group = age_group)) +
   geom_line() +
@@ -463,8 +462,10 @@ ggplot(regressions %>% filter(age_group != "16-20"),
     color = "Age Group"
   ) +
   theme_minimal()
+```
 
 
+```{r}
 ggplot(regressions %>% filter(age_group != "16-20"),
        aes(x = period, y = estimate, color = age_group, group = age_group)) +
   geom_line() +
@@ -618,7 +619,7 @@ my_regression_function <- function(data,
     ) %>%
     unnest(cols = tidied) %>%
     filter(term == "age") %>%
-    select(age_group, period, estimate, std.error, p.value)
+    select(age_group, period, estimate, std.error, p.value, model)
 
   list(
     data_name            = deparse(substitute(data)),
@@ -667,4 +668,70 @@ final_results %>% filter(age_group_col == "age_6cat") %>% filter(period_col == "
 
 ```
 
+# Final Results
 
+```{r}
+
+final_results$regression_output[[1]]$regression_results
+final_results$regression_output[[2]]$regression_results
+final_results$regression_output[[3]]$regression_results
+final_results$regression_output[[4]]$regression_results
+final_results$regression_output[[5]]$regression_results
+final_results$regression_output[[6]]$regression_results
+final_results$regression_output[[7]]$regression_results
+final_results$regression_output[[8]]$regression_results
+final_results$regression_output[[9]]$regression_results
+
+
+```
+
+
+# Forest Plots
+
+```{r}
+
+
+# Coeff
+model_gen5_period7 %>% 
+#model_gen5_period10 %>% 
+#model_gen5_period17 %>% 
+#model_gen10_period7 %>% 
+#model_gen10_period10 %>% 
+#model_gen10_period17 %>% 
+#model_gen15_period7 %>% 
+#model_gen15_period10 %>% 
+# model_gen15_period17 %>% 
+tidy(conf.int = TRUE) %>%
+  filter(grepl("generation_5total|period_7total", term)  ) %>% #,
+       #  !grepl(":", term)) %>%  # remove interaction terms
+ggplot(aes(x = estimate, y = term)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  labs(
+    x = "Coefficient (SRH: 1=Poor, 4=Excellent)",
+    y = "",
+    title = "Coefficient Plot: Generation & Period (No Interaction Terms Shown)"
+  ) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_minimal()
+
+
+# interactions
+
+model_gen5_period7 %>% 
+tidy(conf.int = TRUE) %>%
+  filter(#grepl("generation_5total|period_7total", term)  )#,
+         grepl(":", term)) %>%  # remove interaction terms %>% 
+ggplot(aes(x = estimate, y = term)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  labs(
+    x = "Coefficient (SRH: 1=Poor, 4=Excellent)",
+    y = "",
+    title = "Coefficient Plot: Generation & Period (No Interaction Terms Shown)"
+  ) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_minimal()
+
+
+```
