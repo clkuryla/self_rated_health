@@ -25,6 +25,7 @@ We will use the General Social Survey (GSS). For the years 1980 - 2010, there is
 GSS is done approximately biannually, so we have 19 waves of data.
 
 https://chatgpt.com/share/6777c9b5-551c-8002-9603-e2d1856253e7
+https://claude.ai/chat/6c281c0b-d282-43af-a648-044529888668 
 
 # Limitations
 
@@ -1029,7 +1030,8 @@ fit_age_period_models <- function(data) {
 period_age_results <- fit_age_period_models(df)
 
 # Create visualization
-ggplot(period_age_results, aes(x = period, y = estimate, color = age_group, group = age_group)) +
+ggplot(period_age_results %>% filter(period != "2009-2013"),
+       aes(x = period, y = estimate, color = age_group, group = age_group)) +
   # Add confidence interval ribbons
   geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, fill = age_group), 
               alpha = 0.1, color = NA) +
@@ -1060,11 +1062,378 @@ ggplot(period_age_results, aes(x = period, y = estimate, color = age_group, grou
     caption = "Shaded areas represent 95% confidence intervals"
   )
 
+# 4. Period-specific mortality rates
+df %>%
+  group_by(period_7total, age_group) %>%
+  summarise(
+    mortality_rate = mean(died_by_2014),
+    .groups = 'drop'
+  ) %>%
+  ggplot(aes(x = period_7total, y = mortality_rate, fill = age_group)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#  scale_fill_viridis_d() +
+  labs(
+    title = "Mortality Rates by Period and Age Group",
+    x = "Period",
+    y = "Mortality Rate"
+  )
+
 ```
 
-# Key Findings:
 
-Temporal Trend
+
+```{r}
+
+library(tidyverse)
+library(patchwork)
+
+# Helper function to create confidence intervals
+add_ci <- function(model_results) {
+  model_results %>%
+    mutate(
+      lower_ci = estimate - 1.96 * std.error,
+      upper_ci = estimate + 1.96 * std.error
+    )
+}
+
+# 1. Main SRH effect over time
+p1 <- period_results %>%
+  add_ci() %>%
+  ggplot(aes(x = period, y = estimate)) +
+  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci), alpha = 0.2) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "SRH-Mortality Association Over Time",
+    x = "Period",
+    y = "SRH Coefficient (Log Odds)"
+  )
+
+# 2. Age-stratified effects
+p2 <- period_age_results %>%
+  ggplot(aes(x = period, y = estimate, color = age_group)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~age_group) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_viridis_d() +
+  labs(
+    title = "Age-Stratified SRH Effects",
+    x = "Period",
+    y = "SRH Coefficient"
+  )
+
+# 3. Cohort effects with uncertainty
+p3 <- generation_results %>%
+  add_ci() %>%
+  ggplot(aes(x = reorder(generation_5total, estimate), y = estimate)) +
+  geom_pointrange(aes(ymin = lower_ci, ymax = upper_ci)) +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "SRH Effects by Birth Cohort",
+    x = "Generation",
+    y = "SRH Coefficient (Log Odds)"
+  )
+
+# 4. Period-specific mortality rates
+p4 <- df %>%
+  group_by(period_7total, age_group) %>%
+  summarise(
+    mortality_rate = mean(died_by_2014),
+    .groups = 'drop'
+  ) %>%
+  ggplot(aes(x = period_7total, y = mortality_rate, fill = age_group)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#  scale_fill_viridis_d() +
+  labs(
+    title = "Mortality Rates by Period and Age Group",
+    x = "Period",
+    y = "Mortality Rate"
+  )
+
+p4
+
+# Combine plots
+(p1 + p2) / (p3 + p4) +
+  plot_layout(guides = 'collect') +
+  plot_annotation(
+    title = "GSS Mortality Analysis Dashboard",
+    theme = theme(plot.title = element_text(size = 16, face = "bold"))
+  )
+
+p1
+p2
+p3
+p4
+
+```
+
+
+```{r}
+
+library(tidyverse)
+#library(viridis)  # for colorblind-friendly palettes
+
+# Prepare the SRH distribution data
+srh_dist <- df %>%
+  # Create period groups (using cut like before)
+  mutate(
+    period = cut(
+      year,
+      breaks = c(1978, 1983, 1988, 1993, 1998, 2003, 2008, 2013),
+      labels = c("1979-1983", "1984-1988", "1989-1993", "1994-1998", 
+                "1999-2003", "2004-2008", "2009-2013")
+    ),
+    # Convert SRH to factor with meaningful labels
+    SRH = factor(SRH, 
+                levels = 1:4,
+                labels = c("Poor", "Fair", "Good", "Excellent"))
+  ) %>%
+  # Calculate weighted proportions by period
+  group_by(period, SRH) %>%
+  summarise(
+    n_weighted = sum(wtsscomp),
+    .groups = 'drop'
+  ) %>%
+  group_by(period) %>%
+  mutate(proportion = n_weighted / sum(n_weighted) * 100)
+
+# Create different visualizations of the distribution changes
+
+# 1. Stacked area plot
+p1 <- ggplot(srh_dist, aes(x = period, y = proportion, fill = SRH)) +
+  geom_area(position = "stack") +
+ # scale_fill_viridis_d(direction = -1) +  # reverse direction for intuitive color mapping
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "Changes in SRH Distribution Over Time",
+    subtitle = "Stacked area plot showing relative proportions",
+    x = "Period",
+    y = "Percentage",
+    fill = "Self-Rated Health"
+  )
+
+# 2. Side-by-side bars
+p2 <- ggplot(srh_dist, aes(x = period, y = proportion, fill = SRH)) +
+  geom_col(position = "dodge", width = 0.8) +
+#  scale_fill_viridis_d(direction = -1) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "SRH Distribution by Period",
+    subtitle = "Side-by-side comparison of categories",
+    x = "Period",
+    y = "Percentage",
+    fill = "Self-Rated Health"
+  )
+
+# 3. Faceted line plot for clearer trend visualization
+p3 <- ggplot(srh_dist, aes(x = period, y = proportion, color = SRH, group = SRH)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  facet_wrap(~SRH, scales = "free_y") +
+#  scale_color_viridis_d(direction = -1) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold")
+  ) +
+  labs(
+    title = "Trends in SRH Categories Over Time",
+    subtitle = "Individual trend lines for each category",
+    x = "Period",
+    y = "Percentage"
+  )
+
+# Combine plots using patchwork
+library(patchwork)
+
+combined_plot <- (p1 + p2) / p3 +
+  plot_annotation(
+    title = "Self-Rated Health Distribution Changes Over Time",
+    subtitle = "Multiple perspectives on temporal changes in SRH responses",
+    theme = theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12, face = "italic")
+    )
+  )
+combined_plot
+
+p2
+p3
+p4
+
+# Save the combined plot
+#ggsave("srh_distribution_changes.png", combined_plot, 
+  #     width = 15, height = 12, dpi = 300)
+
+# Optional: Create a table of proportions
+srh_table <- srh_dist %>%
+  pivot_wider(
+    names_from = SRH,
+    values_from = proportion
+  ) %>%
+  arrange(period)
+
+# Print the table
+print(srh_table)
+
+```
+
+
+```{r}
+
+# First, let's create a function to calculate event counts and sample sizes
+calculate_metrics <- function(data) {
+  data %>%
+    group_by(period, age_group) %>%
+    summarise(
+      n = n(),
+      n_deaths = sum(died_by_2014),
+      death_rate = n_deaths/n,
+    #  death_rate = mean(died_by_2014),
+      .groups = 'drop'
+    )
+}
+
+metrics <- calculate_metrics(df %>% mutate(period = period_7total))
+
+# Create period and age groups
+df_analysis <- df %>%
+  mutate(
+    period = cut(
+      year,
+      breaks = c(1978, 1983, 1988, 1993, 1998, 2003, 2008),  # Excluding 2009-2013
+      labels = c("1979-1983", "1984-1988", "1989-1993", "1994-1998", 
+                "1999-2003", "2004-2008")
+    ),
+    age_group = case_when(
+      age < 50 ~ "18-49",  # Broader age groups for stability
+      age < 65 ~ "50-64",
+      age < 80 ~ "65-79",
+      TRUE ~ "80+"
+    ),
+    age_group = factor(age_group, levels = c("18-49", "50-64", "65-79", "80+"))
+  )
+
+# Fit stratified models
+fit_stratified_models <- function(data) {
+  data %>%
+    group_by(period, age_group) %>%
+    group_modify(~ {
+      model <- glm(
+        died_by_2014 ~ SRH + time_at_risk, 
+        family = binomial(link = "logit"),
+        data = .x,
+        weights = wtsscomp
+      )
+      
+      tidy(model) %>%
+        filter(term == "SRH") %>%
+        mutate(
+          n = nrow(.x),
+          n_deaths = sum(.x$died_by_2014)
+        )
+    }) %>%
+    ungroup()
+}
+
+# Get model results
+model_results <- df_analysis %>%
+  fit_stratified_models() %>%
+  mutate(
+    reliability = case_when(
+      n_deaths >= 100 ~ "High",
+      n_deaths >= 50 ~ "Medium",
+      TRUE ~ "Low"
+    ),
+    reliability = factor(reliability, levels = c("High", "Medium", "Low"))
+  )
+
+# Create main visualization
+p1 <- ggplot(model_results, 
+       aes(x = period, y = estimate, color = age_group, 
+           size = reliability, group = age_group)) +
+  geom_line(position = "dodge", size = 1) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),
+                width = 0.2) +
+#  scale_color_viridis_d() +
+  scale_size_manual(values = c(3, 2, 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(
+    title = "SRH-Mortality Association Over Time by Age Group",
+    subtitle = "Point size indicates estimate reliability based on death counts",
+    x = "Survey Period",
+    y = "SRH Coefficient (Log Odds)",
+    color = "Age Group",
+    size = "Estimate\nReliability"
+  )
+
+p1
+
+# Create supplementary visualization of event counts
+p2 <- metrics %>%
+  ggplot(aes(x = period, y = n_deaths, fill = age_group)) +
+  geom_col(position = "dodge") +
+#  scale_fill_viridis_d() +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "Number of Deaths by Period and Age Group",
+    x = "Survey Period",
+    y = "Number of Deaths",
+    fill = "Age Group"
+  )
+
+# Combine plots
+library(patchwork)
+combined_plot <- p1 / p2 +
+  plot_layout(heights = c(2, 1))
+combined_plot
+
+p1
+p2
+
+# Save plot
+# ggsave("revised_srh_mortality_trends.png", combined_plot, 
+#        width = 12, height = 10, dpi = 300)
+
+```
+
+
+
+# Key Findings
+
+## Temporal Trend
 
 The SRH-mortality association strengthened substantially over time:
 
@@ -1075,7 +1444,7 @@ The SRH-mortality association strengthened substantially over time:
 Major strengthening occurred between 1989-1993 and 1994-1998
 Effect stabilized from mid-1990s onward
 
-Cohort Effects
+## Cohort Effects
 
 Strongest association in Silent Generation (1928-1945): coefficient = -0.361
 Moderate effect in Greatest Generation (1901-1927): coefficient = -0.206
@@ -1083,14 +1452,14 @@ Weaker effects in later cohorts, but with wider confidence intervals
 Boomer coefficient: -0.241
 Gen X coefficient: -0.182 (less precise)
 
-Age-Period Interaction
+## Age-Period Interaction
 
 Stronger associations in older age groups
 All age groups show temporal strengthening
 Age gradient becomes more pronounced in recent periods
 Effect most stable in middle-age groups (40-59)
 
-Methodological Controls
+## Methodological Controls
 
 Results robust to:
 Time at risk adjustment
@@ -1101,7 +1470,8 @@ Period-cohort modeling
 
 
 # Conclusion
-The predictive power of SRH for mortality has increased substantially since 1980, with the most dramatic strengthening occurring in the mid-1990s. This pattern holds across age groups but is strongest among older adults. The increasing validity of SRH as a mortality predictor likely reflects improved health literacy, healthcare access, and standardization of health self-assessment over time. These findings support the continued and growing utility of SRH in population health surveillance and clinical risk assessment.
+The predictive power of SRH for mortality has increased substantially since 1980, with the most dramatic strengthening occurring in the mid-1990s. 
+
 Limitations:
 
 Single endpoint (2014) creates varying follow-up times
